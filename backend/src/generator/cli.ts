@@ -31,12 +31,10 @@ function hasFlag(args: string[], flag: string): boolean {
 
 async function cmdCreate(args: string[]): Promise<void> {
   const expiryDaysStr = getArg(args, '--expiryDays');
-  const sessionKeysStr = getArg(args, '--sessionKeys');
-  const sessionKeysFile = getArg(args, '--sessionKeysFile');
   const maxUsesStr = getArg(args, '--maxUses');
 
   if (!expiryDaysStr) {
-    console.error('Usage: create --expiryDays <number> [--sessionKeys sk1,sk2,...] [--sessionKeysFile path] [--maxUses <number>]');
+    console.error('Usage: create --expiryDays <number> [--maxUses <number>]');
     process.exit(1);
   }
 
@@ -46,21 +44,9 @@ async function cmdCreate(args: string[]): Promise<void> {
     process.exit(1);
   }
 
-  // Collect session keys
-  let sessionKeys: string[] = [];
-  if (sessionKeysFile) {
-    const fs = await import('fs');
-    const content = fs.readFileSync(sessionKeysFile, 'utf-8');
-    sessionKeys = content.split('\n').map(s => s.trim()).filter(Boolean);
-  } else if (sessionKeysStr) {
-    sessionKeys = sessionKeysStr.split(',').map(s => s.trim()).filter(Boolean);
-  }
-
   // Determine maxUses
   let maxUses = 1;
-  if (sessionKeys.length > 0) {
-    maxUses = sessionKeys.length;
-  } else if (maxUsesStr) {
+  if (maxUsesStr) {
     maxUses = parseInt(maxUsesStr, 10);
     if (isNaN(maxUses) || maxUses <= 0) {
       console.error('--maxUses must be a positive integer');
@@ -68,8 +54,8 @@ async function cmdCreate(args: string[]): Promise<void> {
     }
   }
 
-  const code = await createActivationCode(maxUses, expiryDays, sessionKeys.length > 0 ? sessionKeys : undefined);
-  console.log(`Created: ${code}  maxUses=${maxUses}  expiryDays=${expiryDays}${sessionKeys.length > 0 ? `  sessionKeys=${sessionKeys.length}` : ''}`);
+  const code = await createActivationCode(maxUses, expiryDays);
+  console.log(`Created: ${code}  maxUses=${maxUses}  expiryDays=${expiryDays}`);
 }
 
 async function cmdList(args: string[]): Promise<void> {

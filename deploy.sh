@@ -65,10 +65,46 @@ fi
 # 3. 安装 Docker Compose
 if ! command -v docker-compose &> /dev/null; then
     log_info "安装 Docker Compose..."
-    curl -L "https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-    chmod +x /usr/local/bin/docker-compose
-    ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose
-    log_info "Docker Compose 安装完成"
+    
+    # 尝试多个下载源
+    COMPOSE_VERSION="v2.24.5"
+    COMPOSE_FILE="/usr/local/bin/docker-compose"
+    
+    # 方法1: 使用 DaoCloud 镜像（国内）
+    log_info "尝试从 DaoCloud 镜像下载..."
+    if curl -L --connect-timeout 10 --max-time 120 \
+        "https://get.daocloud.io/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-$(uname -s)-$(uname -m)" \
+        -o "$COMPOSE_FILE" 2>/dev/null; then
+        log_info "DaoCloud 下载成功"
+    else
+        # 方法2: 使用 GitHub 镜像
+        log_info "DaoCloud 失败，尝试 GitHub 镜像..."
+        if curl -L --connect-timeout 10 --max-time 120 \
+            "https://mirror.ghproxy.com/https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-$(uname -s)-$(uname -m)" \
+            -o "$COMPOSE_FILE" 2>/dev/null; then
+            log_info "GitHub 镜像下载成功"
+        else
+            # 方法3: 使用 pip 安装
+            log_warn "镜像下载失败，尝试使用 pip 安装..."
+            apt install -y python3-pip
+            pip3 install docker-compose
+            log_info "通过 pip 安装完成"
+        fi
+    fi
+    
+    # 如果下载成功，设置权限
+    if [ -f "$COMPOSE_FILE" ]; then
+        chmod +x "$COMPOSE_FILE"
+        ln -sf "$COMPOSE_FILE" /usr/bin/docker-compose
+    fi
+    
+    # 验证安装
+    if command -v docker-compose &> /dev/null; then
+        log_info "Docker Compose 安装完成: $(docker-compose version --short 2>/dev/null || echo 'version unknown')"
+    else
+        log_error "Docker Compose 安装失败"
+        exit 1
+    fi
 else
     log_info "Docker Compose 已安装，跳过"
 fi

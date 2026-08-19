@@ -27,8 +27,18 @@ fi
 # 2. 安装 Docker Compose
 if ! command -v docker-compose &> /dev/null; then
     echo "安装 Docker Compose..."
-    curl -L https://get.daocloud.io/docker/compose/releases/download/v2.24.5/docker-compose-$(uname -s)-$(uname -m) -o /usr/local/bin/docker-compose
-    chmod +x /usr/local/bin/docker-compose
+    # 使用国内镜像
+    curl -L --connect-timeout 10 --max-time 120 \
+        https://get.daocloud.io/docker/compose/releases/download/v2.24.5/docker-compose-$(uname -s)-$(uname -m) \
+        -o /usr/local/bin/docker-compose || \
+    # 备用：GitHub 镜像
+    curl -L --connect-timeout 10 --max-time 120 \
+        https://mirror.ghproxy.com/https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-$(uname -s)-$(uname -m) \
+        -o /usr/local/bin/docker-compose || \
+    # 备用：pip 安装
+    (apt install -y python3-pip && pip3 install docker-compose)
+    
+    [ -f /usr/local/bin/docker-compose ] && chmod +x /usr/local/bin/docker-compose
 fi
 
 # 3. 安装 Node.js
