@@ -5,6 +5,18 @@ set -e
 
 echo "=== Auto-Cookie 快速部署 ==="
 
+# 检查并清理旧目录
+if [ "$(basename $(pwd))" != "auto-cookie" ]; then
+    if [ -d "auto-cookie" ]; then
+        echo "清理旧目录..."
+        cd auto-cookie && docker-compose down 2>/dev/null || true
+        cd .. && rm -rf auto-cookie
+    fi
+    echo "克隆项目..."
+    git clone https://github.com/wp13461544040/auto-cookie.git
+    cd auto-cookie
+fi
+
 # 1. 安装 Docker
 if ! command -v docker &> /dev/null; then
     echo "安装 Docker..."

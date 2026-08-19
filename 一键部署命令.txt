@@ -1,0 +1,56 @@
+=== 服务器一键部署命令 ===
+
+【方法1：使用脚本（推荐）】
+
+# 下载并执行部署脚本
+curl -fsSL https://raw.githubusercontent.com/wp13461544040/auto-cookie/main/deploy.sh | sudo bash
+
+# 或者手动下载
+wget https://raw.githubusercontent.com/wp13461544040/auto-cookie/main/deploy.sh
+sudo bash deploy.sh
+
+
+【方法2：手动清理后部署】
+
+# 如果目录已存在，先清理
+cd auto-cookie && docker-compose down
+cd .. && rm -rf auto-cookie
+
+# 重新克隆
+git clone https://github.com/wp13461544040/auto-cookie.git
+cd auto-cookie
+sudo bash deploy.sh
+
+
+【方法3：一行命令清理+部署】
+
+rm -rf auto-cookie && git clone https://github.com/wp13461544040/auto-cookie.git && cd auto-cookie && sudo bash deploy.sh
+
+
+【方法4：使用快速脚本（国内服务器）】
+
+rm -rf auto-cookie && git clone https://github.com/wp13461544040/auto-cookie.git && cd auto-cookie && sudo bash deploy-simple.sh
+
+
+【更新已部署的服务】
+
+cd auto-cookie
+sudo bash update.sh
+
+
+=== 常见问题处理 ===
+
+Q: 提示目录已存在？
+A: rm -rf auto-cookie
+
+Q: git clone 太慢？
+A: 使用 gitee 镜像或配置代理
+
+Q: npm install 失败？
+A: npm config set registry https://registry.npmmirror.com
+
+Q: docker-compose 命令不存在？
+A: 先执行 deploy.sh，会自动安装
+
+Q: 端口被占用？
+A: 修改 docker-compose.yml 中的端口映射

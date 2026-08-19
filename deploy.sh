@@ -21,6 +21,28 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
+# 检查是否在 auto-cookie 目录中
+if [ "$(basename $(pwd))" = "auto-cookie" ]; then
+    log_warn "检测到已在 auto-cookie 目录中"
+    DEPLOY_DIR=$(pwd)
+else
+    # 检查当前目录是否存在 auto-cookie
+    if [ -d "auto-cookie" ]; then
+        log_warn "检测到已存在 auto-cookie 目录，清理中..."
+        cd auto-cookie
+        docker-compose down 2>/dev/null || true
+        cd ..
+        rm -rf auto-cookie
+        log_info "旧目录已清理"
+    fi
+    
+    # 克隆项目
+    log_info "克隆项目..."
+    git clone https://github.com/wp13461544040/auto-cookie.git
+    DEPLOY_DIR="$(pwd)/auto-cookie"
+    cd auto-cookie
+fi
+
 # 1. 更新系统
 log_info "更新系统包..."
 apt update
@@ -61,7 +83,10 @@ else
     log_info "Node.js 已安装: $(node -v)"
 fi
 
-# 5. 检查环境变量文件
+# 5. 确保在正确的目录
+cd "$DEPLOY_DIR"
+
+# 6. 检查环境变量文件
 if [ ! -f .env ]; then
     log_warn ".env 文件不存在，创建默认配置..."
     cat > .env << 'EOF'
@@ -72,7 +97,7 @@ DB_ROOT_PASSWORD=root123
 EOF
 fi
 
-# 6. 构建后端代码
+# 7. 构建后端代码
 log_info "构建后端项目..."
 cd backend
 
@@ -86,16 +111,16 @@ npm run build
 
 cd ..
 
-# 7. 启动 Docker 容器
+# 8. 启动 Docker 容器
 log_info "启动 Docker 服务..."
 docker-compose down 2>/dev/null || true
 docker-compose up -d --build
 
-# 8. 等待数据库启动
+# 9. 等待数据库启动
 log_info "等待数据库启动..."
 sleep 15
 
-# 9. 运行数据库迁移
+# 10. 运行数据库迁移
 log_info "运行数据库迁移..."
 docker-compose exec -T backend npm run migrate || {
     log_warn "自动迁移失败，尝试手动迁移..."
@@ -131,11 +156,11 @@ docker-compose exec -T backend npm run migrate || {
     "
 }
 
-# 10. 检查服务状态
+# 11. 检查服务状态
 log_info "检查服务状态..."
 docker-compose ps
 
-# 11. 显示日志
+# 12. 显示日志
 log_info "最近日志："
 docker-compose logs --tail=20
 
