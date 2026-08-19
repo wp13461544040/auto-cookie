@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Claude 账号切换 — 管理后台</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f7; color: #1d1d1f; }
+    .topbar { background: #1d1d1f; color: #fff; padding: 0 24px; height: 52px; display: flex; align-items: center; gap: 16px; }
+    .topbar h1 { font-size: 16px; font-weight: 600; }
+    .topbar .badge { font-size: 11px; background: #0071e3; border-radius: 4px; padding: 2px 8px; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+    .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .stat-card { background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .stat-card .num { font-size: 32px; font-weight: 700; color: #0071e3; }
+    .stat-card .label { font-size: 13px; color: #6e6e73; margin-top: 4px; }
+    .panel { background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); margin-bottom: 24px; overflow: hidden; }
+    .panel-header { padding: 16px 20px; border-bottom: 1px solid #f0f0f0; display: flex; align-items: center; justify-content: space-between; }
+    .panel-header h2 { font-size: 15px; font-weight: 600; }
+    .panel-body { padding: 20px; }
+    .section { margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid #f0f0f0; }
+    .section:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+    .section-title { font-size: 13px; font-weight: 600; color: #6e6e73; margin-bottom: 14px; text-transform: uppercase; letter-spacing: .5px; }
+    .form-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    .field label { font-size: 12px; color: #6e6e73; font-weight: 500; }
+    .field input, .field textarea, .field select { border: 1px solid #d2d2d7; border-radius: 8px; padding: 8px 12px; font-size: 14px; outline: none; transition: border-color .15s; font-family: inherit; }
+    .field input:focus, .field textarea:focus, .field select:focus { border-color: #0071e3; }
+    .field textarea { resize: vertical; min-height: 100px; width: 400px; font-family: monospace; font-size: 12px; }
+    .hint { font-size: 11px; color: #6e6e73; margin-top: 4px; }
+    .btn { padding: 8px 18px; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: opacity .15s; white-space: nowrap; }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+    .btn:hover:not(:disabled) { opacity: .85; }
+    .btn-primary { background: #0071e3; color: #fff; }
+    .btn-danger  { background: #ff3b30; color: #fff; }
+    .btn-ghost   { background: #f5f5f7; color: #1d1d1f; border: 1px solid #d2d2d7; }
+    .btn-sm { padding: 5px 12px; font-size: 12px; }
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; font-size: 12px; color: #6e6e73; font-weight: 600; padding: 8px 12px; border-bottom: 1px solid #f0f0f0; }
+    td { padding: 10px 12px; border-bottom: 1px solid #f8f8f8; font-size: 13px; vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #fafafa; }
+    .badge-active   { background: #d1fae5; color: #065f46; border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 600; }
+    .badge-inactive { background: #fce7f3; color: #9d174d; border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 600; }
+    .badge-expired  { background: #fef3c7; color: #92400e; border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 600; }
+    .badge-used     { background: #e5e7eb; color: #6b7280; border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 600; }
+    .code-text { font-family: monospace; background: #f5f5f7; padding: 2px 6px; border-radius: 4px; font-size: 13px; cursor: pointer; user-select: all; }
+    .code-text:hover { background: #e8e8ed; }
+    .progress-bar { background: #e5e7eb; border-radius: 4px; height: 6px; overflow: hidden; width: 80px; display: inline-block; vertical-align: middle; }
+    .progress-bar-inner { height: 100%; background: #0071e3; border-radius: 4px; }
+    .key-preview { font-family: monospace; font-size: 12px; color: #6e6e73; }
+    .toast { position: fixed; bottom: 24px; right: 24px; background: #1d1d1f; color: #fff; padding: 10px 18px; border-radius: 8px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 999; max-width: 400px; }
+    .toast.show { opacity: 1; }
+    .empty { text-align: center; padding: 40px; color: #6e6e73; font-size: 14px; }
+    .tabs { display: flex; gap: 0; border-bottom: 1px solid #f0f0f0; }
+    .tab { padding: 12px 20px; font-size: 14px; cursor: pointer; border-bottom: 2px solid transparent; color: #6e6e73; user-select: none; }
+    .tab.active { color: #0071e3; border-bottom-color: #0071e3; font-weight: 500; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    .keys-count { font-size: 12px; background: #e5e7eb; color: #374151; border-radius: 10px; padding: 1px 7px; margin-left: 4px; }
+    .keys-count.green { background: #d1fae5; color: #065f46; }
+    @media (max-width: 600px) { .form-row { flex-direction: column; } .field textarea { width: 100%; } }
+  </style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>Claude 账号切换</h1>
+  <span class="badge">管理后台</span>
+</div>
+
+<div class="container">
+
+  <!-- 统计概览 -->
+  <div class="stats-row">
+    <div class="stat-card"><div class="num" id="statTotal">—</div><div class="label">激活码总数</div></div>
+    <div class="stat-card"><div class="num" id="statActive">—</div><div class="label">有效激活码</div></div>
+    <div class="stat-card"><div class="num" id="statExpired">—</div><div class="label">已过期</div></div>
+    <div class="stat-card"><div class="num" id="statUses">—</div><div class="label">累计使用次数</div></div>
+    <div class="stat-card"><div class="num" id="statKeys">—</div><div class="label">可用 SessionKey</div></div>
+    <div class="stat-card"><div class="num" id="statKeysTotal">—</div><div class="label">SessionKey 总数</div></div>
+  </div>
+
+  <!-- 标签页 -->
+  <div class="panel">
+    <div class="tabs">
+      <div class="tab active" data-tab="codes">激活码管理</div>
+      <div class="tab" data-tab="keys">SessionKey 管理</div>
+    </div>
+
+    <!-- 激活码 Tab -->
+    <div id="tab-codes" class="tab-content active">
+      <div class="panel-body">
+
+        <!-- 生成激活码 -->
+        <div class="section">
+          <div class="section-title">生成激活码</div>
+          <div class="form-row">
+            <div class="field">
+              <label>有效天数</label>
+              <input type="number" id="expiryDays" value="30" min="1" style="width:110px" />
+            </div>
+            <div class="field">
+              <label>最大使用次数</label>
+              <input type="number" id="maxUses" value="10" min="1" style="width:110px" placeholder="无 key 时必填" />
+              <div class="hint">绑定 SessionKey 时自动计算</div>
+            </div>
+            <div class="field">
+              <label>生成数量</label>
+              <input type="number" id="genCount" value="1" min="1" max="100" style="width:90px" />
+            </div>
+            <div class="field">
+              <label>绑定 SessionKey（可选，每行一个）</label>
+              <textarea id="genSessionKeys" placeholder="粘贴 sessionKey，每行一个&#10;绑定后每个 key 只能使用一次"></textarea>
+            </div>
+            <div class="field">
+              <label>&nbsp;</label>
+              <button class="btn btn-primary" id="btnGenerate" onclick="generateCodes()">生成激活码</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 激活码列表 -->
+        <div class="section">
+          <div class="section-title">激活码列表</div>
+          <div class="form-row" style="margin-bottom:16px;align-items:center;gap:8px;">
+            <span style="font-size:13px;color:#6e6e73">筛选：</span>
+            <select id="filterActive" onchange="loadCodes()" style="border:1px solid #d2d2d7;border-radius:8px;padding:6px 10px;font-size:13px;outline:none;">
+              <option value="">全部</option>
+              <option value="true">有效</option>
+              <option value="false">已禁用</option>
+            </select>
+            <button class="btn btn-ghost btn-sm" onclick="loadCodes()">刷新</button>
+          </div>
+          <div id="codesTableWrap"><div class="empty">加载中…</div></div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- SessionKey Tab -->
+    <div id="tab-keys" class="tab-content">
+      <div class="panel-body">
+
+        <!-- 上传 SessionKey -->
+        <div class="section">
+          <div class="section-title">上传 SessionKey（完整 JSON 格式）</div>
+          <div class="form-row" style="align-items:flex-start">
+            <div class="field">
+              <label>完整 JSON 数据（支持数组）</label>
+              <textarea id="fullJsonKeys" placeholder='[&#10;  {&#10;    "email": "user@example.com",&#10;    "uuid": "xxx",&#10;    "cookies": {&#10;      "sessionKey": "sk-ant-sid02-xxx",&#10;      "routingHint": "sk-ant-rh-xxx",&#10;      "__cf_bm": "xxx",&#10;      "_cfuvid": "xxx"&#10;    },&#10;    "anonymousId": "claudeai.v1.xxx",&#10;    "deviceId": "xxx"&#10;  }&#10;]' style="min-height:200px;width:500px;font-family:monospace;font-size:11px"></textarea>
+              <div class="hint">支持单个对象或数组。外部调用：POST /api/admin/session-keys</div>
+            </div>
+            <div class="field">
+              <label>绑定激活码（可选）</label>
+              <input type="text" id="fullJsonActivationCode" placeholder="XXXX-XXXX-XXXX-XXXX" style="width:200px;font-family:monospace" />
+              <div class="hint">绑定后自动更新激活码的可用次数</div>
+            </div>
+            <div class="field">
+              <label>&nbsp;</label>
+              <button class="btn btn-primary" id="btnUploadFull" onclick="uploadFullJsonKeys()">上传</button>
+            </div>
+          </div>
+          <div style="margin-top:16px;padding:12px;background:#f5f5f7;border-radius:8px;font-size:12px;color:#6e6e73">
+            <strong style="color:#1d1d1f">API 调用示例：</strong>
+            <pre style="margin-top:8px;padding:8px;background:#fff;border-radius:4px;overflow-x:auto;font-family:monospace;font-size:11px">curl -X POST http://localhost:3001/api/admin/session-keys \
+  -H "Content-Type: application/json" \
+  -d '{"sessionKeys": [...], "activationCode": "XXXX-XXXX-XXXX-XXXX"}'</pre>
+          </div>
+        </div>
+
+        <!-- SessionKey 列表 -->
+        <div class="section">
+          <div class="section-title">SessionKey 列表</div>
+          <div class="form-row" style="margin-bottom:16px;align-items:center;gap:8px;">
+            <span style="font-size:13px;color:#6e6e73">按激活码筛选：</span>
+            <input type="text" id="filterByCode" placeholder="留空显示全部" style="border:1px solid #d2d2d7;border-radius:8px;padding:6px 10px;font-size:13px;outline:none;width:200px;font-family:monospace" />
+            <button class="btn btn-ghost btn-sm" onclick="loadKeys()">查询</button>
+            <button class="btn btn-ghost btn-sm" onclick="document.getElementById('filterByCode').value=''; loadKeys()">全部</button>
+            <button class="btn btn-primary btn-sm" onclick="batchCheckKeys()">批量健康检查</button>
+          </div>
+          <div id="keysTableWrap"><div class="empty">加载中…</div></div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = '/api/admin';
+
+// ── Tab ──────────────────────────────────────────────────────────────────
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    const name = tab.dataset.tab;
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === 'tab-' + name));
+    if (name === 'keys') loadKeys();
+  });
+});
+
+// ── Toast ────────────────────────────────────────────────────────────────
+function toast(msg, duration = 3000) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(el._timer);
+  el._timer = setTimeout(() => el.classList.remove('show'), duration);
+}
+
+// ── Stats ────────────────────────────────────────────────────────────────
+async function loadStats() {
+  try {
+    const r = await fetch(API + '/stats').then(r => r.json());
+    if (!r.success) return;
+    document.getElementById('statTotal').textContent     = r.codes.total ?? 0;
+    document.getElementById('statActive').textContent    = r.codes.active ?? 0;
+    document.getElementById('statExpired').textContent   = r.codes.expired ?? 0;
+    document.getElementById('statUses').textContent      = r.codes.totalUses ?? 0;
+    document.getElementById('statKeys').textContent      = r.sessionKeys.active ?? 0;
+    document.getElementById('statKeysTotal').textContent = r.sessionKeys.total ?? 0;
+  } catch(e) {}
+}
+
+// ── Codes ────────────────────────────────────────────────────────────────
+async function generateCodes() {
+  const expiryDays   = parseInt(document.getElementById('expiryDays').value);
+  const maxUsesVal   = parseInt(document.getElementById('maxUses').value);
+  const count        = parseInt(document.getElementById('genCount').value) || 1;
+  const skRaw        = document.getElementById('genSessionKeys').value.trim();
+  const sessionKeys  = skRaw ? skRaw.split(/[\n,]+/).map(s => s.trim()).filter(Boolean) : [];
+
+  if (!expiryDays || expiryDays < 1) { toast('请填写有效天数'); return; }
+  if (!sessionKeys.length && (!maxUsesVal || maxUsesVal < 1)) {
+    toast('请填写最大使用次数，或粘贴 SessionKey'); return;
+  }
+
+  const btn = document.getElementById('btnGenerate');
+  btn.disabled = true;
+  try {
+    const body = { expiryDays, count };
+    if (sessionKeys.length) body.sessionKeys = sessionKeys;
+    else body.maxUses = maxUsesVal;
+
+    const r = await fetch(API + '/codes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).then(r => r.json());
+
+    if (r.success) {
+      toast(`生成成功：${r.codes.join('  ')}${sessionKeys.length ? `（已绑定 ${sessionKeys.length} 个 Key）` : ''}`);
+      document.getElementById('genSessionKeys').value = '';
+      loadCodes(); loadStats();
+    } else {
+      toast('生成失败：' + r.error);
+    }
+  } finally { btn.disabled = false; }
+}
+
+async function loadCodes() {
+  const filter = document.getElementById('filterActive').value;
+  const url = filter ? `${API}/codes?isActive=${filter}` : `${API}/codes`;
+  const r = await fetch(url).then(r => r.json());
+  const wrap = document.getElementById('codesTableWrap');
+
+  if (!r.success || !r.codes.length) {
+    wrap.innerHTML = '<div class="empty">暂无激活码</div>';
+    return;
+  }
+
+  // 获取每个激活码的 key 数量
+  const keyCountMap = {};
+  try {
+    const kr = await fetch(API + '/session-keys').then(r => r.json());
+    if (kr.success) {
+      kr.keys.forEach(k => {
+        if (!k.activationCode) return;
+        if (!keyCountMap[k.activationCode]) keyCountMap[k.activationCode] = { total: 0, active: 0 };
+        keyCountMap[k.activationCode].total++;
+        if (k.isActive) keyCountMap[k.activationCode].active++;
+      });
+    }
+  } catch(e) {}
+
+  wrap.innerHTML = `<table>
+    <thead><tr>
+      <th>激活码</th><th>额度</th><th>进度</th><th>可用 Key</th><th>过期时间</th><th>状态</th><th>最后使用</th><th>操作</th>
+    </tr></thead>
+    <tbody>${r.codes.map(c => {
+      const expired = new Date(c.expiryDate) < new Date();
+      const pct = c.maxUses > 0 ? Math.round((c.usedCount / c.maxUses) * 100) : 0;
+      const statusBadge = !c.isActive
+        ? '<span class="badge-inactive">已禁用</span>'
+        : expired ? '<span class="badge-expired">已过期</span>'
+                  : '<span class="badge-active">有效</span>';
+      const kc = keyCountMap[c.code];
+      const keysCell = kc
+        ? `<span class="keys-count ${kc.active > 0 ? 'green' : ''}">${kc.active}/${kc.total}</span>`
+        : '<span style="color:#aaa;font-size:12px">—</span>';
+      return `<tr>
+        <td><span class="code-text" title="点击复制" onclick="copyText('${c.code}')">${c.code}</span></td>
+        <td>${c.usedCount} / ${c.maxUses}</td>
+        <td>
+          <div class="progress-bar"><div class="progress-bar-inner" style="width:${pct}%"></div></div>
+          <span style="font-size:11px;color:#6e6e73;margin-left:6px">${pct}%</span>
+        </td>
+        <td>${keysCell}</td>
+        <td>${fmtDate(c.expiryDate)}</td>
+        <td>${statusBadge}</td>
+        <td>${c.lastUsedAt ? fmtDate(c.lastUsedAt) : '—'}</td>
+        <td style="display:flex;gap:6px;flex-wrap:wrap">
+          ${c.isActive && !expired
+            ? `<button class="btn btn-danger btn-sm" onclick="disableCode('${c.code}')">禁用</button>`
+            : ''}
+          <button class="btn btn-ghost btn-sm" onclick="viewKeys('${c.code}')">查看 Key</button>
+        </td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table>`;
+}
+
+async function disableCode(code) {
+  if (!confirm(`确定禁用激活码 ${code}？`)) return;
+  const r = await fetch(`${API}/codes/${encodeURIComponent(code)}`, { method: 'DELETE' }).then(r => r.json());
+  if (r.success) { toast('已禁用'); loadCodes(); loadStats(); }
+  else toast('操作失败：' + r.error);
+}
+
+function viewKeys(code) {
+  // 切换到 SessionKey tab 并筛选
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === 'keys'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === 'tab-keys'));
+  document.getElementById('filterByCode').value = code;
+  loadKeys();
+}
+
+// ── SessionKeys ──────────────────────────────────────────────────────────
+async function uploadFullJsonKeys() {
+  const raw = document.getElementById('fullJsonKeys').value.trim();
+  const activationCode = document.getElementById('fullJsonActivationCode').value.trim();
+
+  if (!raw) { toast('请输入 JSON 数据'); return; }
+
+  try {
+    // 解析 JSON（支持单个对象或数组）
+    let data = JSON.parse(raw);
+    if (!Array.isArray(data)) data = [data];
+    if (data.length === 0) { toast('JSON 数据为空'); return; }
+
+    const btn = document.getElementById('btnUploadFull');
+    btn.disabled = true;
+
+    const body = { 
+      sessionKeys: data,
+      activationCode: activationCode || undefined
+    };
+
+    const r = await fetch(API + '/session-keys', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).then(r => r.json());
+
+    if (r.success) {
+      toast(`上传成功：${r.count} 个 SessionKey${activationCode ? ` → ${activationCode}` : ''}`, 4000);
+      document.getElementById('fullJsonKeys').value = '';
+      document.getElementById('fullJsonActivationCode').value = '';
+      loadKeys(); loadStats(); loadCodes();
+    } else {
+      toast('上传失败：' + r.error);
+    }
+    btn.disabled = false;
+  } catch (e) {
+    toast('JSON 格式错误：' + e.message);
+  }
+}
+
+async function loadKeys() {
+  const filterCode = document.getElementById('filterByCode')?.value?.trim();
+  const url = filterCode
+    ? `${API}/session-keys?activationCode=${encodeURIComponent(filterCode)}`
+    : `${API}/session-keys`;
+  const r = await fetch(url).then(r => r.json());
+  const wrap = document.getElementById('keysTableWrap');
+
+  if (!r.success || !r.keys.length) {
+    wrap.innerHTML = '<div class="empty">暂无 SessionKey</div>';
+    return;
+  }
+
+  wrap.innerHTML = `<table>
+    <thead><tr>
+      <th>ID</th><th>Key 预览</th><th>邮箱</th><th>备注</th><th>绑定激活码</th><th>健康状态</th><th>状态</th><th>使用次数</th><th>最后检查</th><th>创建时间</th><th>操作</th>
+    </tr></thead>
+    <tbody>${r.keys.map(k => {
+      let healthBadge = '';
+      if (k.lastCheckStatus === 'healthy') healthBadge = '<span class="badge-active">健康</span>';
+      else if (k.lastCheckStatus === 'expired') healthBadge = '<span class="badge-expired">失效</span>';
+      else if (k.lastCheckStatus === 'error') healthBadge = '<span class="badge-inactive">错误</span>';
+      else healthBadge = '<span style="color:#aaa;font-size:12px">未检查</span>';
+
+      return `<tr>
+      <td>${k.id}</td>
+      <td><span class="key-preview">${k.keyPreview}…</span></td>
+      <td>${k.email ? `<span style="font-size:12px">${k.email}</span>` : '—'}</td>
+      <td>${k.label || '—'}</td>
+      <td>${k.activationCode
+        ? `<span class="code-text" onclick="copyText('${k.activationCode}')">${k.activationCode}</span>`
+        : '<span style="color:#aaa">未绑定</span>'}</td>
+      <td>${healthBadge}</td>
+      <td>${k.isActive
+        ? '<span class="badge-active">可用</span>'
+        : k.usedCount > 0
+          ? '<span class="badge-used">已使用</span>'
+          : '<span class="badge-inactive">已禁用</span>'}</td>
+      <td>${k.usedCount}</td>
+      <td>${k.lastCheckedAt ? fmtDate(k.lastCheckedAt) : '—'}</td>
+      <td>${fmtDate(k.createdAt)}</td>
+      <td style="display:flex;gap:6px;flex-wrap:wrap">${k.isActive
+        ? `<button class="btn btn-danger btn-sm" onclick="deleteKey(${k.id})">删除</button><button class="btn btn-ghost btn-sm" onclick="checkSingleKey(${k.id})">检查</button>`
+        : '—'}</td>
+    </tr>`;
+    }).join('')}</tbody>
+  </table>`;
+}
+
+async function deleteKey(id) {
+  if (!confirm('确定删除该 SessionKey？')) return;
+  const r = await fetch(`${API}/session-keys/${id}`, { method: 'DELETE' }).then(r => r.json());
+  if (r.success) { toast('已删除'); loadKeys(); loadStats(); }
+  else toast('操作失败：' + r.error);
+}
+
+// ── Utils ────────────────────────────────────────────────────────────────
+function fmtDate(d) {
+  if (!d) return '—';
+  return new Date(d).toLocaleString('zh-CN', { hour12: false });
+}
+
+function copyText(text) {
+  navigator.clipboard.writeText(text).then(() => toast('已复制'));
+}
+
+async function batchCheckKeys() {
+  const filterCode = document.getElementById('filterByCode')?.value?.trim();
+  if (!filterCode) {
+    if (!confirm('未筛选激活码，将检查所有可用 SessionKey（最多100个），可能需要较长时间，确认继续？')) return;
+  }
+
+  const btn = event.target;
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '检查中...';
+
+  try {
+    const body = {};
+    if (filterCode) body.activationCode = filterCode;
+
+    const r = await fetch(API + '/batch-check-keys', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).then(r => r.json());
+
+    if (r.success) {
+      const summary = r.results.reduce((acc, res) => {
+        acc[res.status] = (acc[res.status] || 0) + 1;
+        return acc;
+      }, {});
+      const msg = `检查完成 ${r.checked} 个：健康 ${summary.healthy || 0}，失效 ${summary.expired || 0}，错误 ${summary.error || 0}`;
+      toast(msg, 5000);
+      loadKeys(); loadStats();
+    } else {
+      toast('批量检查失败：' + r.error);
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
+}
+
+async function checkSingleKey(id) {
+  const btn = event.target;
+  btn.disabled = true;
+  const originalText = btn.textContent;
+  btn.textContent = '检查中';
+
+  try {
+    const r = await fetch(API + '/batch-check-keys', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ keyIds: [id] })
+    }).then(r => r.json());
+
+    if (r.success && r.results.length > 0) {
+      const status = r.results[0].status;
+      toast(`健康检查：${status === 'healthy' ? '✓ 健康' : status === 'expired' ? '✗ 失效' : '✗ 错误'}`);
+      loadKeys();
+    } else {
+      toast('检查失败');
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
+}
+
+// ── Init ─────────────────────────────────────────────────────────────────
+loadStats();
+loadCodes();
+</script>
+</body>
+</html>

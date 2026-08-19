@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claude Account Switcher</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <img src="icons/icon48.png" alt="Claude Account Switcher" class="logo" width="24" height="24">
+      <h1>Claude 账号切换</h1>
+    </header>
+
+    <!-- Mode selector -->
+    <div class="mode-selector">
+      <label class="mode-option">
+        <input type="radio" name="mode" value="activation" id="modeActivation" checked>
+        <span>激活码登录</span>
+      </label>
+      <label class="mode-option">
+        <input type="radio" name="mode" value="local" id="modeLocal">
+        <span>本地登录</span>
+      </label>
+    </div>
+
+    <!-- Local login form (hidden by default) -->
+    <div id="localLoginForm" class="local-login-form" hidden>
+      <label for="localSessionKey">输入 sessionKey：</label>
+      <input 
+        type="text" 
+        id="localSessionKey" 
+        class="local-input"
+        placeholder="sessionKey=sk-ant-sid02-xxxxx"
+        autocomplete="off"
+      />
+      <button id="localLoginButton" class="btn-primary">
+        登录
+      </button>
+    </div>
+
+    <!-- Status display area (7.11) -->
+    <div id="status" class="status status-idle" role="status" aria-live="polite">
+      <div class="status-icon">
+        <span class="spinner" id="spinner" aria-hidden="true" hidden></span>
+        <span class="status-dot" id="statusDot"></span>
+      </div>
+      <div class="status-text">
+        <p id="statusMessage">准备切换账号</p>
+        <p id="remainingUses" class="remaining-uses" aria-label="剩余使用次数"></p>
+      </div>
+    </div>
+
+    <!-- Switch Account button (7.4) - for activation code mode -->
+    <button id="switchButton" class="btn-primary" aria-label="切换 Claude 账号">
+      切换账号
+    </button>
+
+    <!-- Configure link (7.10) -->
+    <footer class="footer">
+      <a id="optionsLink" href="#" role="button" aria-label="打开配置页面">
+        ⚙ 配置激活码
+      </a>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

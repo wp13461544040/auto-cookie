@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claude Account Switcher — 配置</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <h1>Claude Account Switcher 配置</h1>
+    </header>
+
+    <main>
+      <form id="optionsForm" novalidate>
+        <!-- Activation code input (8.4) -->
+        <div class="form-group">
+          <label for="activationCode" class="form-label">激活码</label>
+          <input
+            type="text"
+            id="activationCode"
+            name="activationCode"
+            class="form-input"
+            placeholder="XXXX-XXXX-XXXX-XXXX"
+            autocomplete="off"
+            autocorrect="off"
+            autocapitalize="characters"
+            spellcheck="false"
+            maxlength="40"
+            aria-describedby="activationCodeHint activationCodeError"
+          >
+          <p id="activationCodeHint" class="form-hint">
+            激活码为 16-32 个字符（格式：XXXX-XXXX-XXXX-XXXX）
+          </p>
+          <p id="activationCodeError" class="form-error" role="alert" hidden></p>
+        </div>
+
+        <!-- API endpoint input -->
+        <div class="form-group">
+          <label for="apiEndpoint" class="form-label">API 地址</label>
+          <input
+            type="url"
+            id="apiEndpoint"
+            name="apiEndpoint"
+            class="form-input"
+            placeholder="https://api.example.com"
+            autocomplete="off"
+            aria-describedby="apiEndpointHint"
+          >
+          <p id="apiEndpointHint" class="form-hint">后端 API 服务器地址（HTTPS）</p>
+        </div>
+
+        <!-- Save button (8.5) -->
+        <button type="submit" id="saveButton" class="btn-primary">
+          保存配置
+        </button>
+      </form>
+
+      <!-- Feedback messages -->
+      <!-- Success (8.10) -->
+      <div id="successMsg" class="feedback feedback-success" role="status" hidden>
+        ✓ 配置已保存
+      </div>
+      <!-- Error (8.11) -->
+      <div id="errorMsg" class="feedback feedback-error" role="alert" hidden></div>
+
+      <!-- Currently configured code display (8.9) -->
+      <div id="currentConfig" class="current-config" hidden>
+        <p class="current-config-label">当前配置：</p>
+        <p id="currentCode" class="current-config-value"></p>
+      </div>
+    </main>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>

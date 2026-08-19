@@ -1,0 +1,1268 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Auto-Cookie 后台管理</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; padding: 20px; }
+    .container { max-width: 1400px; margin: 0 auto; }
+    .header { background: #fff; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    h1 { font-size: 24px; color: #333; }
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
+    .stat-card { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .stat-card h3 { font-size: 14px; color: #666; margin-bottom: 8px; }
+    .stat-card .number { font-size: 32px; font-weight: bold; color: #007bff; }
+    .tabs { display: flex; gap: 10px; margin-bottom: 20px; }
+    .tab { background: #fff; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-size: 14px; transition: all 0.3s; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .tab.active { background: #007bff; color: #fff; }
+    .tab:hover { transform: translateY(-2px); }
+    .panel { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: none; }
+    .panel.active { display: block; }
+    .toolbar { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }
+    .btn { padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; transition: all 0.3s; }
+    .btn-primary { background: #007bff; color: #fff; }
+    .btn-primary:hover { background: #0056b3; }
+    .btn-danger { background: #dc3545; color: #fff; }
+    .btn-danger:hover { background: #c82333; }
+    .btn-success { background: #28a745; color: #fff; }
+    .btn-success:hover { background: #218838; }
+    input, textarea { padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; width: 100%; }
+    .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-bottom: 10px; }
+    .table-container { overflow-x: auto; max-height: 600px; overflow-y: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
+    th { background: #f8f9fa; position: sticky; top: 0; font-weight: 600; }
+    tr:hover { background: #f8f9fa; }
+    .badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; }
+    .badge-success { background: #d4edda; color: #155724; }
+    .badge-danger { background: #f8d7da; color: #721c24; }
+    .badge-warning { background: #fff3cd; color: #856404; }
+    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; }
+    .modal.show { display: flex; align-items: center; justify-content: center; }
+    .modal-content { background: #fff; padding: 30px; border-radius: 8px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto; }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .close { cursor: pointer; font-size: 24px; color: #999; }
+    .loading { text-align: center; padding: 20px; color: #666; }
+    .error { background: #f8d7da; color: #721c24; padding: 12px; border-radius: 6px; margin-bottom: 15px; }
+    .success { background: #d4edda; color: #155724; padding: 12px; border-radius: 6px; margin-bottom: 15px; }
+    pre { background: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: auto; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h1>🍪 Auto-Cookie 后台管理</h1>
+        <button class="btn btn-danger" onclick="logout()" style="padding: 8px 16px;">🚪 登出</button>
+      </div>
+    </div>
+
+    <div class="stats" id="stats">
+      <div class="stat-card"><h3>总激活码</h3><div class="number" id="totalCodes">-</div></div>
+      <div class="stat-card"><h3>活跃激活码</h3><div class="number" id="activeCodes">-</div></div>
+      <div class="stat-card"><h3>总 Session Keys</h3><div class="number" id="totalKeys">-</div></div>
+      <div class="stat-card"><h3>活跃 Session Keys</h3><div class="number" id="activeKeys">-</div></div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('codes')">激活码管理</button>
+      <button class="tab" onclick="switchTab('keys')">Session Keys</button>
+      <button class="tab" onclick="switchTab('upload')">批量上传</button>
+      <button class="tab" onclick="switchTab('settings')">自动清理</button>
+    </div>
+
+    <!-- 激活码管理 -->
+    <div class="panel active" id="panel-codes">
+      <div class="toolbar">
+        <button class="btn btn-primary" onclick="showCreateCodeModal()">生成激活码</button>
+        <button class="btn btn-success" onclick="loadCodes()">刷新</button>
+      </div>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>激活码</th>
+              <th>最大使用次数</th>
+              <th>已使用</th>
+              <th>过期时间</th>
+              <th>状态</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="codesTable"><tr><td colspan="6" class="loading">加载中...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Session Keys -->
+    <div class="panel" id="panel-keys">
+      <div class="toolbar">
+        <button class="btn btn-success" onclick="loadKeys()">刷新</button>
+        <button class="btn btn-primary" onclick="showProxyModal()">批量检测</button>
+        <button class="btn btn-danger" onclick="deleteExpiredKeys()">删除失效账号</button>
+      </div>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>绑定激活码</th>
+              <th>使用状态</th>
+              <th>Email</th>
+              <th>UUID</th>
+              <th>代理</th>
+              <th>上次检测</th>
+              <th>健康状态</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="keysTable"><tr><td colspan="9" class="loading">加载中...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 批量上传 -->
+    <div class="panel" id="panel-upload">
+      <h3 style="margin-bottom: 15px;">批量导入 Session Keys（导入到全局池）</h3>
+      <p style="margin-bottom: 10px; color: #666; font-size: 14px;">💡 Session Keys 将被导入到全局池，使用激活码时自动分配</p>
+      <textarea id="uploadJson" rows="15" placeholder='粘贴 JSON 数据，格式：
+[
+  {
+    "email": "user@example.com",
+    "uuid": "uuid-string",
+    "sessionKey": "sk-ant-xxx",
+    "proxy": "http://127.0.0.1:7890",
+    "cookies": {
+      "sessionKey": "sk-ant-xxx",
+      "routingHint": "xxx"
+    }
+  }
+]
+
+支持字段：
+- proxy: 代理地址（可选）
+- ip_info.proxy: 也会自动识别
+- 其他字段同之前'></textarea>
+      <button class="btn btn-primary" style="margin-top: 10px; width: 100%;" onclick="uploadKeys()">上传到全局池</button>
+      <div id="uploadResult" style="margin-top: 15px;"></div>
+    </div>
+
+    <!-- 自动清理设置 -->
+    <div class="panel" id="panel-settings">
+      <h3 style="margin-bottom: 15px;">⏰ 定时自动清理设置</h3>
+      
+      <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+        <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
+          <label style="display: flex; align-items: center; cursor: pointer;">
+            <input type="checkbox" id="autoCleanEnabled" onchange="toggleAutoClean()" style="width: auto; margin-right: 8px;">
+            <span style="font-weight: 600;">启用定时清理</span>
+          </label>
+          <span id="autoCleanStatus" class="badge badge-danger">已禁用</span>
+        </div>
+        
+        <div class="form-row">
+          <div>
+            <label>清理间隔（分钟）</label>
+            <input type="number" id="cleanInterval" value="60" min="30" max="1440" onchange="saveAutoCleanSettings()">
+            <p style="font-size: 12px; color: #666; margin-top: 5px;">建议：30-1440分钟（0.5-24小时）</p>
+            <div style="display: flex; gap: 5px; margin-top: 5px; flex-wrap: wrap;">
+              <button class="btn" style="padding: 4px 8px; font-size: 12px; background: #e9ecef; color: #333;" onclick="document.getElementById('cleanInterval').value = 30; saveAutoCleanSettings(); event.preventDefault();">30分</button>
+              <button class="btn" style="padding: 4px 8px; font-size: 12px; background: #e9ecef; color: #333;" onclick="document.getElementById('cleanInterval').value = 60; saveAutoCleanSettings(); event.preventDefault();">1小时</button>
+              <button class="btn" style="padding: 4px 8px; font-size: 12px; background: #e9ecef; color: #333;" onclick="document.getElementById('cleanInterval').value = 180; saveAutoCleanSettings(); event.preventDefault();">3小时</button>
+              <button class="btn" style="padding: 4px 8px; font-size: 12px; background: #e9ecef; color: #333;" onclick="document.getElementById('cleanInterval').value = 360; saveAutoCleanSettings(); event.preventDefault();">6小时</button>
+              <button class="btn" style="padding: 4px 8px; font-size: 12px; background: #e9ecef; color: #333;" onclick="document.getElementById('cleanInterval').value = 720; saveAutoCleanSettings(); event.preventDefault();">12小时</button>
+              <button class="btn" style="padding: 4px 8px; font-size: 12px; background: #e9ecef; color: #333;" onclick="document.getElementById('cleanInterval').value = 1440; saveAutoCleanSettings(); event.preventDefault();">24小时</button>
+            </div>
+          </div>
+          <div>
+            <label>代理地址（可选）</label>
+            <input type="text" id="autoCleanProxy" placeholder="http://127.0.0.1:7890" onchange="saveAutoCleanSettings()">
+            <p style="font-size: 12px; color: #666; margin-top: 5px;">检测时使用的代理</p>
+          </div>
+        </div>
+      </div>
+
+      <div style="background: #fff3cd; padding: 15px; border-radius: 6px; margin-bottom: 15px; border-left: 4px solid #ffc107;">
+        <p style="margin: 0; color: #856404;"><strong>⚠️ 注意事项：</strong></p>
+        <ul style="margin: 10px 0 0 20px; color: #856404;">
+          <li>定时清理会自动检测所有 Session Keys 的有效性</li>
+          <li>失效的账号会被自动删除</li>
+          <li>定时器运行在浏览器中，关闭页面后会停止</li>
+          <li>建议使用代理避免频繁请求被限制</li>
+        </ul>
+      </div>
+
+      <div id="autoCleanLogs" style="background: #f8f9fa; padding: 15px; border-radius: 6px; max-height: 300px; overflow-y: auto;">
+        <h4 style="margin: 0 0 10px 0; font-size: 14px;">📋 清理日志</h4>
+        <div id="cleanLogList" style="font-size: 13px; color: #666;">
+          <p style="margin: 0; font-style: italic;">暂无清理记录</p>
+        </div>
+      </div>
+
+      <div style="margin-top: 15px; display: flex; gap: 10px;">
+        <button class="btn btn-success" onclick="runCleanNow()">立即执行清理</button>
+        <button class="btn btn-danger" onclick="clearCleanLogs()">清空日志</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 创建激活码弹窗 -->
+  <div class="modal" id="createCodeModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>生成激活码</h2>
+        <span class="close" onclick="closeModal('createCodeModal')">&times;</span>
+      </div>
+      <div class="form-row">
+        <div>
+          <label>时效类型</label>
+          <select id="expiryUnit" style="padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; width: 100%;">
+            <option value="hours">⏰ 小时卡</option>
+            <option value="days" selected>📅 天卡</option>
+            <option value="weeks">📆 周卡</option>
+            <option value="months">📊 月卡</option>
+          </select>
+        </div>
+        <div>
+          <label>时效数值</label>
+          <input type="number" id="expiryValue" value="30" min="1" placeholder="输入数字">
+        </div>
+      </div>
+      <div style="margin-bottom: 15px;">
+        <label style="display: block; margin-bottom: 5px; font-size: 13px; color: #666;">快捷设置</label>
+        <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+          <button class="btn" style="padding: 6px 12px; font-size: 12px; background: #e9ecef; color: #495057;" onclick="setExpiry('hours', 1)">1小时</button>
+          <button class="btn" style="padding: 6px 12px; font-size: 12px; background: #e9ecef; color: #495057;" onclick="setExpiry('hours', 24)">24小时</button>
+          <button class="btn" style="padding: 6px 12px; font-size: 12px; background: #e9ecef; color: #495057;" onclick="setExpiry('days', 7)">7天</button>
+          <button class="btn" style="padding: 6px 12px; font-size: 12px; background: #e9ecef; color: #495057;" onclick="setExpiry('days', 30)">30天</button>
+          <button class="btn" style="padding: 6px 12px; font-size: 12px; background: #e9ecef; color: #495057;" onclick="setExpiry('weeks', 4)">4周</button>
+          <button class="btn" style="padding: 6px 12px; font-size: 12px; background: #e9ecef; color: #495057;" onclick="setExpiry('months', 1)">1月</button>
+          <button class="btn" style="padding: 6px 12px; font-size: 12px; background: #e9ecef; color: #495057;" onclick="setExpiry('months', 3)">3月</button>
+          <button class="btn" style="padding: 6px 12px; font-size: 12px; background: #e9ecef; color: #495057;" onclick="setExpiry('months', 12)">12月</button>
+        </div>
+      </div>
+      <div class="form-row">
+        <div><label>生成数量</label><input type="number" id="codeCount" value="1" min="1" max="100"></div>
+        <div><label>最大使用次数</label><input type="number" id="maxUses" value="10" min="1"></div>
+      </div>
+      <div style="background: #f8f9fa; padding: 10px; border-radius: 6px; margin-bottom: 15px; font-size: 13px; color: #666;">
+        <strong>示例：</strong><br>
+        • 小时卡 + 24 = 24小时有效期<br>
+        • 天卡 + 30 = 30天有效期<br>
+        • 周卡 + 4 = 4周有效期<br>
+        • 月卡 + 12 = 12个月有效期
+      </div>
+      <button class="btn btn-primary" style="width: 100%; margin-top: 15px;" onclick="createCodes()">生成</button>
+      <div id="createResult" style="margin-top: 15px;"></div>
+    </div>
+  </div>
+
+  <!-- 批量检测代理配置弹窗 -->
+  <div class="modal" id="proxyModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>批量检测配置</h2>
+        <span class="close" onclick="closeModal('proxyModal')">&times;</span>
+      </div>
+      <div style="margin-bottom: 15px;">
+        <label>代理地址（可选）</label>
+        <input type="text" id="proxyUrl" placeholder="http://127.0.0.1:7890 或 socks5://127.0.0.1:1080">
+        <p style="font-size: 12px; color: #666; margin-top: 5px;">留空则直连。支持 http/https/socks5 代理</p>
+      </div>
+      <button class="btn btn-primary" style="width: 100%;" onclick="batchCheckKeys()">开始检测</button>
+      <div id="proxyResult" style="margin-top: 15px;"></div>
+    </div>
+  </div>
+
+  <!-- 修改激活码配置弹窗 -->
+  <div class="modal" id="editMaxUsesModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>修改激活码配置</h2>
+        <span class="close" onclick="closeModal('editMaxUsesModal')">&times;</span>
+      </div>
+      <input type="hidden" id="editCode">
+      <div style="margin-bottom: 15px;">
+        <label>激活码</label>
+        <input type="text" id="editCodeDisplay" readonly style="background: #f5f5f5;">
+      </div>
+      <div style="margin-bottom: 15px;">
+        <label>已使用次数</label>
+        <input type="text" id="editUsedCount" readonly style="background: #f5f5f5;">
+      </div>
+      
+      <h3 style="font-size: 16px; margin: 20px 0 10px 0; color: #333;">时效配置</h3>
+      <div class="form-row">
+        <div>
+          <label>时效类型</label>
+          <select id="editExpiryUnit" style="padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; width: 100%;">
+            <option value="hours">⏰ 小时</option>
+            <option value="days">📅 天</option>
+            <option value="weeks">📆 周</option>
+            <option value="months">📊 月</option>
+          </select>
+        </div>
+        <div>
+          <label>时效数值</label>
+          <input type="number" id="editExpiryValue" min="1" placeholder="输入数字">
+        </div>
+      </div>
+      <div style="margin-bottom: 15px;">
+        <label style="display: block; margin-bottom: 5px; font-size: 13px; color: #666;">快捷设置</label>
+        <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+          <button class="btn" style="padding: 6px 12px; font-size: 12px; background: #e9ecef; color: #495057;" onclick="setEditExpiry('hours', 24)">24小时</button>
+          <button class="btn" style="padding: 6px 12px; font-size: 12px; background: #e9ecef; color: #495057;" onclick="setEditExpiry('days', 7)">7天</button>
+          <button class="btn" style="padding: 6px 12px; font-size: 12px; background: #e9ecef; color: #495057;" onclick="setEditExpiry('days', 30)">30天</button>
+          <button class="btn" style="padding: 6px 12px; font-size: 12px; background: #e9ecef; color: #495057;" onclick="setEditExpiry('months', 3)">3月</button>
+          <button class="btn" style="padding: 6px 12px; font-size: 12px; background: #e9ecef; color: #495057;" onclick="setEditExpiry('months', 12)">12月</button>
+        </div>
+      </div>
+
+      <h3 style="font-size: 16px; margin: 20px 0 10px 0; color: #333;">使用次数</h3>
+      <div style="margin-bottom: 15px;">
+        <label>最大使用次数</label>
+        <input type="number" id="editNewMaxUses" min="1" placeholder="输入新的最大使用次数">
+        <p style="font-size: 12px; color: #666; margin-top: 5px;">必须 ≥ 已使用次数</p>
+      </div>
+      
+      <button class="btn btn-primary" style="width: 100%;" onclick="updateActivationCode()">确认修改</button>
+      <div id="editMaxUsesResult" style="margin-top: 15px;"></div>
+    </div>
+  </div>
+
+  <!-- 管理员登录弹窗 -->
+  <div class="modal" id="loginModal">
+    <div class="modal-content" style="max-width: 400px;">
+      <div class="modal-header">
+        <h2>🔐 管理员登录</h2>
+      </div>
+      <div style="margin-bottom: 15px;">
+        <label>用户名</label>
+        <input type="text" id="loginUsername" placeholder="输入管理员用户名" autocomplete="username">
+      </div>
+      <div style="margin-bottom: 15px;">
+        <label>密码</label>
+        <input type="password" id="loginPassword" placeholder="输入管理员密码" autocomplete="current-password">
+      </div>
+      <button class="btn btn-primary" style="width: 100%;" onclick="doLogin()">登录</button>
+      <div id="loginResult" style="margin-top: 15px;"></div>
+    </div>
+  </div>
+
+  <!-- 首次初始化弹窗 -->
+  <div class="modal" id="initModal">
+    <div class="modal-content" style="max-width: 500px;">
+      <div class="modal-header">
+        <h2>🎉 欢迎使用 Auto-Cookie</h2>
+      </div>
+      <div style="background: #e7f3ff; padding: 15px; border-radius: 6px; margin-bottom: 20px; border-left: 4px solid #007bff;">
+        <strong>首次使用，请设置管理员账号</strong><br>
+        <span style="font-size: 13px; color: #666;">设置后将写入配置文件，请牢记您的账号密码</span>
+      </div>
+      <div style="margin-bottom: 15px;">
+        <label>用户名 *</label>
+        <input type="text" id="initUsername" placeholder="至少3个字符" autocomplete="off">
+        <p style="font-size: 12px; color: #666; margin-top: 5px;">建议使用字母和数字组合</p>
+      </div>
+      <div style="margin-bottom: 15px;">
+        <label>密码 *</label>
+        <input type="password" id="initPassword" placeholder="至少6个字符">
+        <p style="font-size: 12px; color: #666; margin-top: 5px;">建议使用强密码，包含字母、数字和符号</p>
+      </div>
+      <div style="margin-bottom: 15px;">
+        <label>确认密码 *</label>
+        <input type="password" id="initPasswordConfirm" placeholder="再次输入密码">
+      </div>
+      <button class="btn btn-primary" style="width: 100%;" onclick="doInit()">创建管理员账号</button>
+      <div id="initResult" style="margin-top: 15px;"></div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = 'http://localhost:3001/admin';
+    let autoCleanTimer = null;
+
+    // 从 localStorage 获取管理员 token
+    function getAdminToken() {
+      return localStorage.getItem('adminToken') || '';
+    }
+
+    // 设置管理员 token
+    function setAdminToken(token) {
+      if (token) {
+        localStorage.setItem('adminToken', token);
+      } else {
+        localStorage.removeItem('adminToken');
+      }
+    }
+
+    async function api(endpoint, options = {}) {
+      const token = getAdminToken();
+      const headers = { 
+        'Content-Type': 'application/json', 
+        ...options.headers 
+      };
+      
+      // 如果有 token，添加 Authorization header
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const res = await fetch(API_BASE + endpoint, {
+        ...options,
+        headers
+      });
+
+      const data = await res.json();
+
+      // 检查是否需要初始化
+      if (data.needInit === true) {
+        showInitModal();
+        throw new Error('需要先初始化管理员账号');
+      }
+
+      // 如果返回 401/403，提示需要登录
+      if (res.status === 401 || res.status === 403) {
+        if (!getAdminToken()) {
+          showLoginModal();
+        } else {
+          alert('认证失败：' + data.error);
+          showLoginModal();
+        }
+        throw new Error(data.error);
+      }
+
+      return data;
+    }
+
+    async function loadStats() {
+      try {
+        const data = await api('/stats');
+        if (data.success) {
+          document.getElementById('totalCodes').textContent = data.codes.total || 0;
+          document.getElementById('activeCodes').textContent = data.codes.active || 0;
+          document.getElementById('totalKeys').textContent = data.sessionKeys.total || 0;
+          document.getElementById('activeKeys').textContent = data.sessionKeys.active || 0;
+        }
+      } catch (err) {
+        console.error('加载统计失败', err);
+      }
+    }
+
+    async function loadCodes() {
+      try {
+        const data = await api('/codes');
+        const tbody = document.getElementById('codesTable');
+        if (!data.success || !data.codes.length) {
+          tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color: #999;">暂无数据</td></tr>';
+          return;
+        }
+        tbody.innerHTML = data.codes.map(c => {
+          const isActive = c.isActive && new Date(c.expiryDate) > new Date();
+          const status = !c.isActive ? '已禁用' : isActive ? '活跃' : '已过期';
+          const badge = !c.isActive ? 'danger' : isActive ? 'success' : 'warning';
+          const remaining = c.maxUses - c.usedCount;
+          return `<tr>
+            <td><code>${c.code}</code></td>
+            <td>${c.maxUses} <button class="btn btn-primary" style="padding: 2px 8px; font-size: 12px; margin-left: 5px;" onclick="showEditMaxUsesModal('${c.code}', ${c.maxUses}, ${c.usedCount})">修改</button></td>
+            <td>${c.usedCount} <span style="color: #28a745;">(剩余 ${remaining})</span></td>
+            <td>${new Date(c.expiryDate).toLocaleString('zh-CN')}</td>
+            <td><span class="badge badge-${badge}">${status}</span></td>
+            <td>
+              <button class="btn btn-danger" style="padding: 4px 12px;" onclick="deleteCode('${c.code}')">删除</button>
+            </td>
+          </tr>`;
+        }).join('');
+      } catch (err) {
+        document.getElementById('codesTable').innerHTML = `<tr><td colspan="6" class="error">加载失败: ${err.message}</td></tr>`;
+      }
+    }
+
+    async function loadKeys() {
+      try {
+        const data = await api('/session-keys');
+        const tbody = document.getElementById('keysTable');
+        if (!data.success || !data.keys.length) {
+          tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; color: #999;">暂无数据</td></tr>';
+          return;
+        }
+        tbody.innerHTML = data.keys.map(k => {
+          const status = k.lastCheckStatus || 'unknown';
+          const badge = status === 'healthy' ? 'success' : status === 'expired' ? 'danger' : 'warning';
+          const proxyDisplay = k.proxy ? (k.proxy.length > 20 ? k.proxy.substring(0, 20) + '...' : k.proxy) : '-';
+          const codeDisplay = k.activationCode ? `<code>${k.activationCode}</code>` : '<span style="color:#999;">未使用</span>';
+          const activeDisplay = k.isActive ? '<span class="badge badge-success">可用</span>' : '<span class="badge badge-danger">已使用</span>';
+          return `<tr>
+            <td>${k.id}</td>
+            <td>${codeDisplay}</td>
+            <td>${activeDisplay}</td>
+            <td>${k.email || '-'}</td>
+            <td>${k.uuid ? k.uuid.substring(0, 8) + '...' : '-'}</td>
+            <td title="${k.proxy || ''}">${proxyDisplay}</td>
+            <td>${k.lastCheckedAt ? new Date(k.lastCheckedAt).toLocaleString('zh-CN') : '-'}</td>
+            <td><span class="badge badge-${badge}">${status}</span></td>
+            <td>
+              <button class="btn btn-danger" style="padding: 4px 12px;" onclick="deleteKey(${k.id})">删除</button>
+            </td>
+          </tr>`;
+        }).join('');
+      } catch (err) {
+        document.getElementById('keysTable').innerHTML = `<tr><td colspan="9" class="error">加载失败: ${err.message}</td></tr>`;
+      }
+    }
+
+    async function createCodes() {
+      const expiryUnit = document.getElementById('expiryUnit').value;
+      const expiryValue = parseInt(document.getElementById('expiryValue').value);
+      const count = parseInt(document.getElementById('codeCount').value);
+      const maxUses = parseInt(document.getElementById('maxUses').value);
+      const result = document.getElementById('createResult');
+      
+      if (!expiryValue || !count || !maxUses) {
+        result.innerHTML = '<div class="error">请填写完整信息</div>';
+        return;
+      }
+
+      // 显示友好的时效信息
+      const unitNames = {
+        hours: '小时',
+        days: '天',
+        weeks: '周',
+        months: '月'
+      };
+      const unitName = unitNames[expiryUnit] || expiryUnit;
+
+      try {
+        const data = await api('/codes', {
+          method: 'POST',
+          body: JSON.stringify({ maxUses, count, expiryUnit, expiryValue })
+        });
+        if (data.success) {
+          result.innerHTML = `<div class="success">生成成功！<br>时效：${expiryValue}${unitName} | 使用次数：${maxUses}<pre>${data.codes.join('\n')}</pre></div>`;
+          setTimeout(() => {
+            closeModal('createCodeModal');
+            loadCodes();
+            loadStats();
+          }, 2000);
+        } else {
+          result.innerHTML = `<div class="error">${data.error}</div>`;
+        }
+      } catch (err) {
+        result.innerHTML = `<div class="error">请求失败: ${err.message}</div>`;
+      }
+    }
+
+    async function deleteCode(code) {
+      if (!confirm('确定删除此激活码？')) return;
+      try {
+        await api(`/codes/${code}`, { method: 'DELETE' });
+        loadCodes();
+        loadStats();
+      } catch (err) {
+        alert('删除失败: ' + err.message);
+      }
+    }
+
+    async function deleteKey(id) {
+      if (!confirm('确定删除此 Session Key？')) return;
+      try {
+        await api(`/session-keys/${id}`, { method: 'DELETE' });
+        loadKeys();
+        loadStats();
+      } catch (err) {
+        alert('删除失败: ' + err.message);
+      }
+    }
+
+    async function deleteExpiredKeys() {
+      if (!confirm('确定删除所有失效状态的 Session Keys？\n\n此操作不可恢复！')) return;
+      
+      try {
+        const data = await api('/session-keys/delete-expired', { method: 'POST' });
+        
+        if (data.success) {
+          alert(`成功删除 ${data.count} 个失效账号`);
+          loadKeys();
+          loadStats();
+        } else {
+          alert('删除失败: ' + data.error);
+        }
+      } catch (err) {
+        alert('删除失败: ' + err.message);
+      }
+    }
+
+    function showEditMaxUsesModal(code, currentMaxUses, usedCount) {
+      document.getElementById('editCode').value = code;
+      document.getElementById('editCodeDisplay').value = code;
+      document.getElementById('editUsedCount').value = usedCount;
+      document.getElementById('editNewMaxUses').value = currentMaxUses;
+      document.getElementById('editNewMaxUses').min = usedCount;
+      document.getElementById('editExpiryUnit').value = 'days';
+      document.getElementById('editExpiryValue').value = '';
+      document.getElementById('editMaxUsesResult').innerHTML = '';
+      document.getElementById('editMaxUsesModal').classList.add('show');
+    }
+
+    function setEditExpiry(unit, value) {
+      document.getElementById('editExpiryUnit').value = unit;
+      document.getElementById('editExpiryValue').value = value;
+    }
+
+    async function updateActivationCode() {
+      const code = document.getElementById('editCode').value;
+      const usedCount = parseInt(document.getElementById('editUsedCount').value);
+      const newMaxUses = parseInt(document.getElementById('editNewMaxUses').value);
+      const expiryUnit = document.getElementById('editExpiryUnit').value;
+      const expiryValue = parseInt(document.getElementById('editExpiryValue').value);
+      const result = document.getElementById('editMaxUsesResult');
+      
+      // 构建请求体
+      const updates = {};
+      let hasUpdates = false;
+
+      // 如果修改了最大使用次数
+      if (newMaxUses && !isNaN(newMaxUses)) {
+        if (newMaxUses < 1) {
+          result.innerHTML = '<div class="error">请输入有效的使用次数</div>';
+          return;
+        }
+        if (newMaxUses < usedCount) {
+          result.innerHTML = `<div class="error">新的最大使用次数不能小于已使用次数 (${usedCount})</div>`;
+          return;
+        }
+        updates.maxUses = newMaxUses;
+        hasUpdates = true;
+      }
+
+      // 如果修改了时效
+      if (expiryValue && !isNaN(expiryValue)) {
+        if (expiryValue < 1) {
+          result.innerHTML = '<div class="error">请输入有效的时效数值</div>';
+          return;
+        }
+        updates.expiryUnit = expiryUnit;
+        updates.expiryValue = expiryValue;
+        hasUpdates = true;
+      }
+
+      if (!hasUpdates) {
+        result.innerHTML = '<div class="error">请至少修改一项配置</div>';
+        return;
+      }
+
+      // 显示友好的更新信息
+      const unitNames = { hours: '小时', days: '天', weeks: '周', months: '月' };
+      let changeDesc = [];
+      if (updates.maxUses) changeDesc.push(`使用次数: ${updates.maxUses}`);
+      if (updates.expiryValue) changeDesc.push(`时效: ${updates.expiryValue}${unitNames[updates.expiryUnit]}`);
+      
+      try {
+        const data = await api(`/codes/${code}`, {
+          method: 'PUT',
+          body: JSON.stringify(updates)
+        });
+        
+        if (data.success) {
+          result.innerHTML = `<div class="success">修改成功！<br>${changeDesc.join(' | ')}</div>`;
+          setTimeout(() => {
+            closeModal('editMaxUsesModal');
+            loadCodes();
+            loadStats();
+          }, 1500);
+        } else {
+          result.innerHTML = `<div class="error">${data.error}</div>`;
+        }
+      } catch (err) {
+        result.innerHTML = `<div class="error">修改失败: ${err.message}</div>`;
+      }
+    }
+
+    async function uploadKeys() {
+      const jsonText = document.getElementById('uploadJson').value.trim();
+      const result = document.getElementById('uploadResult');
+
+      if (!jsonText) {
+        result.innerHTML = '<div class="error">请粘贴 JSON 数据</div>';
+        return;
+      }
+
+      try {
+        const sessionKeys = JSON.parse(jsonText);
+        const data = await api('/session-keys', {
+          method: 'POST',
+          body: JSON.stringify({ sessionKeys })
+        });
+        
+        if (data.success) {
+          let msg = `<div class="success">上传成功！导入了 ${data.count} 个 Session Key 到全局池`;
+          if (data.warnings && data.warnings.length) {
+            msg += `<br>警告:<br><pre>${data.warnings.join('\n')}</pre>`;
+          }
+          msg += '</div>';
+          result.innerHTML = msg;
+          document.getElementById('uploadJson').value = '';
+          loadStats();
+        } else {
+          result.innerHTML = `<div class="error">${data.error}</div>`;
+        }
+      } catch (err) {
+        result.innerHTML = `<div class="error">上传失败: ${err.message}</div>`;
+      }
+    }
+
+    async function batchCheckKeys() {
+      const proxy = document.getElementById('proxyUrl').value.trim();
+      const result = document.getElementById('proxyResult');
+      
+      closeModal('proxyModal');
+      
+      // 显示检测中状态，但不清空列表
+      const originalHtml = document.getElementById('keysTable').innerHTML;
+      const loadingRow = '<tr style="background: #fffbea;"><td colspan="9" style="text-align:center; padding: 20px; color: #856404;">🔄 正在批量检测，请稍候...（检测完成后自动刷新）</td></tr>';
+      document.getElementById('keysTable').innerHTML = loadingRow + originalHtml;
+      
+      try {
+        const body = {};
+        if (proxy) body.proxy = proxy;
+        
+        const data = await api('/batch-check-keys', {
+          method: 'POST',
+          body: JSON.stringify(body)
+        });
+        
+        if (data.success) {
+          const healthy = data.results.filter(r => r.status === 'healthy').length;
+          const expired = data.results.filter(r => r.status === 'expired').length;
+          const error = data.results.filter(r => r.status === 'error').length;
+          
+          // 显示详细结果
+          let message = `✅ 检测完成！\n`;
+          message += `\n总计: ${data.checked} 个`;
+          message += `\n✅ 健康: ${healthy} 个`;
+          message += `\n❌ 失效: ${expired} 个`;
+          message += `\n⚠️ 错误: ${error} 个`;
+          message += `\n\n注意: 失效账号已标记但未删除`;
+          
+          if (error > 0) {
+            const errors = data.results.filter(r => r.status === 'error');
+            message += `\n错误详情（查看 Console）`;
+            console.log('检测错误详情:', errors);
+          }
+          
+          alert(message);
+          
+          loadKeys();
+          loadStats();
+        } else {
+          alert('检测失败: ' + data.error);
+          loadKeys();
+        }
+      } catch (err) {
+        alert('检测失败: ' + err.message);
+        loadKeys();
+      }
+    }
+
+    function showProxyModal() {
+      document.getElementById('proxyModal').classList.add('show');
+      document.getElementById('proxyResult').innerHTML = '';
+      // 恢复上次配置
+      const lastProxy = localStorage.getItem('proxyUrl') || '';
+      document.getElementById('proxyUrl').value = lastProxy;
+    }
+
+    function switchTab(name) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      event.target.classList.add('active');
+      document.getElementById('panel-' + name).classList.add('active');
+      
+      if (name === 'codes') loadCodes();
+      if (name === 'keys') loadKeys();
+      if (name === 'settings') loadAutoCleanSettings();
+    }
+
+    function showCreateCodeModal() {
+      document.getElementById('createCodeModal').classList.add('show');
+      document.getElementById('createResult').innerHTML = '';
+    }
+
+    function setExpiry(unit, value) {
+      document.getElementById('expiryUnit').value = unit;
+      document.getElementById('expiryValue').value = value;
+    }
+
+    function showLoginModal() {
+      document.getElementById('loginModal').classList.add('show');
+      document.getElementById('loginResult').innerHTML = '';
+      document.getElementById('loginUsername').value = '';
+      document.getElementById('loginPassword').value = '';
+      document.getElementById('loginUsername').focus();
+    }
+
+    function showInitModal() {
+      document.getElementById('initModal').classList.add('show');
+      document.getElementById('initResult').innerHTML = '';
+      document.getElementById('initUsername').value = '';
+      document.getElementById('initPassword').value = '';
+      document.getElementById('initPasswordConfirm').value = '';
+      document.getElementById('initUsername').focus();
+    }
+
+    async function checkInitStatus() {
+      try {
+        const response = await fetch('http://localhost:3001/admin/init/check');
+        const data = await response.json();
+        
+        if (data.success && !data.initialized) {
+          // 未初始化，显示初始化界面
+          showInitModal();
+          return false;
+        }
+        
+        return data.initialized;
+      } catch (err) {
+        console.error('检查初始化状态失败:', err);
+        return false;
+      }
+    }
+
+    async function doInit() {
+      const username = document.getElementById('initUsername').value.trim();
+      const password = document.getElementById('initPassword').value;
+      const passwordConfirm = document.getElementById('initPasswordConfirm').value;
+      const result = document.getElementById('initResult');
+      
+      // 验证输入
+      if (!username || username.length < 3) {
+        result.innerHTML = '<div class="error">用户名至少3个字符</div>';
+        return;
+      }
+      
+      if (!password || password.length < 6) {
+        result.innerHTML = '<div class="error">密码至少6个字符</div>';
+        return;
+      }
+      
+      if (password !== passwordConfirm) {
+        result.innerHTML = '<div class="error">两次密码输入不一致</div>';
+        return;
+      }
+
+      try {
+        // 调用初始化接口
+        const response = await fetch('http://localhost:3001/admin/init', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          result.innerHTML = '<div class="success">初始化成功！正在登录...</div>';
+          
+          // 自动登录
+          setTimeout(async () => {
+            try {
+              const loginResponse = await fetch('http://localhost:3001/admin/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+              });
+              
+              const loginData = await loginResponse.json();
+              
+              if (loginData.success) {
+                setAdminToken(loginData.token);
+                closeModal('initModal');
+                // 重新加载数据
+                loadStats();
+                loadCodes();
+                loadKeys();
+              } else {
+                result.innerHTML = '<div class="error">初始化成功，但自动登录失败。请手动登录。</div>';
+                setTimeout(() => {
+                  closeModal('initModal');
+                  showLoginModal();
+                }, 2000);
+              }
+            } catch (err) {
+              result.innerHTML = '<div class="error">初始化成功，但自动登录失败。请手动登录。</div>';
+              setTimeout(() => {
+                closeModal('initModal');
+                showLoginModal();
+              }, 2000);
+            }
+          }, 1000);
+        } else {
+          result.innerHTML = `<div class="error">${data.error}</div>`;
+        }
+      } catch (err) {
+        result.innerHTML = `<div class="error">初始化失败: ${err.message}</div>`;
+      }
+    }
+
+    async function doLogin() {
+      const username = document.getElementById('loginUsername').value.trim();
+      const password = document.getElementById('loginPassword').value;
+      const result = document.getElementById('loginResult');
+      
+      if (!username || !password) {
+        result.innerHTML = '<div class="error">请输入用户名和密码</div>';
+        return;
+      }
+
+      try {
+        // 调用登录接口
+        const response = await fetch('http://localhost:3001/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          // 保存 token
+          setAdminToken(data.token);
+          result.innerHTML = '<div class="success">登录成功！</div>';
+          setTimeout(() => {
+            closeModal('loginModal');
+            // 重新加载数据
+            loadStats();
+            loadCodes();
+            loadKeys();
+          }, 1000);
+        } else {
+          result.innerHTML = `<div class="error">${data.error}</div>`;
+        }
+      } catch (err) {
+        result.innerHTML = `<div class="error">登录失败: ${err.message}</div>`;
+      }
+    }
+
+    // 回车键登录和初始化
+    document.addEventListener('DOMContentLoaded', function() {
+      const loginPassword = document.getElementById('loginPassword');
+      if (loginPassword) {
+        loginPassword.addEventListener('keypress', function(e) {
+          if (e.key === 'Enter') {
+            doLogin();
+          }
+        });
+      }
+      
+      const loginUsername = document.getElementById('loginUsername');
+      if (loginUsername) {
+        loginUsername.addEventListener('keypress', function(e) {
+          if (e.key === 'Enter') {
+            doLogin();
+          }
+        });
+      }
+      
+      // 初始化界面的回车键支持
+      const initPasswordConfirm = document.getElementById('initPasswordConfirm');
+      if (initPasswordConfirm) {
+        initPasswordConfirm.addEventListener('keypress', function(e) {
+          if (e.key === 'Enter') {
+            doInit();
+          }
+        });
+      }
+    });
+
+    async function logout() {
+      if (confirm('确定要登出吗？')) {
+        const token = getAdminToken();
+        
+        // 调用登出接口
+        if (token) {
+          try {
+            await fetch('http://localhost:3001/admin/logout', {
+              method: 'POST',
+              headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              }
+            });
+          } catch (err) {
+            console.error('登出请求失败:', err);
+          }
+        }
+        
+        // 清除本地 token
+        setAdminToken('');
+        alert('已登出');
+        location.reload();
+      }
+    }
+
+    function closeModal(id) {
+      document.getElementById(id).classList.remove('show');
+      // 保存代理配置
+      if (id === 'proxyModal') {
+        const proxy = document.getElementById('proxyUrl').value.trim();
+        localStorage.setItem('proxyUrl', proxy);
+      }
+    }
+
+    // 点击模态框外部关闭（除了初始化框，必须完成初始化）
+    window.addEventListener('click', function(event) {
+      if (event.target.classList.contains('modal') && event.target.id !== 'initModal') {
+        closeModal(event.target.id);
+      }
+    });
+
+    // ========== 定时清理功能 ==========
+
+    function loadAutoCleanSettings() {
+      const enabled = localStorage.getItem('autoCleanEnabled') === 'true';
+      const interval = parseInt(localStorage.getItem('cleanInterval') || '60');
+      const proxy = localStorage.getItem('autoCleanProxy') || '';
+      
+      document.getElementById('autoCleanEnabled').checked = enabled;
+      document.getElementById('cleanInterval').value = interval;
+      document.getElementById('autoCleanProxy').value = proxy;
+      
+      updateAutoCleanStatus();
+      loadCleanLogs();
+      
+      if (enabled) {
+        startAutoClean();
+      }
+    }
+
+    function saveAutoCleanSettings() {
+      const enabled = document.getElementById('autoCleanEnabled').checked;
+      const interval = document.getElementById('cleanInterval').value;
+      const proxy = document.getElementById('autoCleanProxy').value.trim();
+      
+      localStorage.setItem('autoCleanEnabled', enabled);
+      localStorage.setItem('cleanInterval', interval);
+      localStorage.setItem('autoCleanProxy', proxy);
+      
+      // 如果已启用，重启定时器以应用新的间隔
+      if (enabled) {
+        startAutoClean();
+        updateAutoCleanStatus();
+      }
+    }
+
+    function toggleAutoClean() {
+      const enabled = document.getElementById('autoCleanEnabled').checked;
+      saveAutoCleanSettings();
+      
+      if (enabled) {
+        startAutoClean();
+        addCleanLog('✅ 定时清理已启用');
+        
+        // 首次启用时询问是否立即执行
+        if (confirm('定时清理已启用。是否立即执行一次清理？')) {
+          runCleanNow(false);
+        }
+      } else {
+        stopAutoClean();
+        addCleanLog('⏹️ 定时清理已停止');
+      }
+      
+      updateAutoCleanStatus();
+    }
+
+    function startAutoClean() {
+      stopAutoClean(); // 先停止旧的定时器
+      
+      const intervalMinutes = parseInt(document.getElementById('cleanInterval').value);
+      const interval = intervalMinutes * 60 * 1000; // 转换为毫秒
+      
+      autoCleanTimer = setInterval(async () => {
+        addCleanLog('🔄 开始定时清理...');
+        await runCleanNow(true);
+      }, interval);
+      
+      // 保存下次执行时间
+      const nextRun = new Date(Date.now() + interval);
+      localStorage.setItem('nextCleanTime', nextRun.toISOString());
+    }
+
+    function stopAutoClean() {
+      if (autoCleanTimer) {
+        clearInterval(autoCleanTimer);
+        autoCleanTimer = null;
+      }
+      localStorage.removeItem('nextCleanTime');
+    }
+
+    function updateAutoCleanStatus() {
+      const enabled = document.getElementById('autoCleanEnabled').checked;
+      const statusEl = document.getElementById('autoCleanStatus');
+      
+      if (enabled) {
+        statusEl.textContent = '运行中';
+        statusEl.className = 'badge badge-success';
+        
+        // 显示倒计时
+        updateCountdown();
+        if (!window.countdownInterval) {
+          window.countdownInterval = setInterval(updateCountdown, 1000);
+        }
+      } else {
+        statusEl.textContent = '已禁用';
+        statusEl.className = 'badge badge-danger';
+        
+        if (window.countdownInterval) {
+          clearInterval(window.countdownInterval);
+          window.countdownInterval = null;
+        }
+      }
+    }
+
+    function updateCountdown() {
+      const nextRun = localStorage.getItem('nextCleanTime');
+      if (!nextRun) return;
+      
+      const now = Date.now();
+      const next = new Date(nextRun).getTime();
+      const diff = next - now;
+      
+      if (diff <= 0) {
+        document.getElementById('autoCleanStatus').textContent = '准备执行...';
+        return;
+      }
+      
+      const hours = Math.floor(diff / (1000 * 60 * 60));
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+      
+      // 如果超过1小时，显示小时:分钟:秒
+      if (hours > 0) {
+        document.getElementById('autoCleanStatus').textContent = 
+          `下次: ${hours}小时${minutes}分${seconds}秒`;
+      } else {
+        // 否则只显示分钟:秒
+        document.getElementById('autoCleanStatus').textContent = 
+          `下次: ${minutes}分${seconds}秒`;
+      }
+    }
+
+    async function runCleanNow(isAuto = false) {
+      const proxy = document.getElementById('autoCleanProxy').value.trim();
+      
+      if (!isAuto) {
+        addCleanLog('🔄 手动执行清理...');
+      }
+      
+      try {
+        const body = {};
+        if (proxy) body.proxy = proxy;
+        
+        const data = await api('/batch-check-keys', {
+          method: 'POST',
+          body: JSON.stringify(body)
+        });
+        
+        if (data.success) {
+          const healthy = data.results.filter(r => r.status === 'healthy').length;
+          const expired = data.results.filter(r => r.status === 'expired').length;
+          const error = data.results.filter(r => r.status === 'error').length;
+          
+          addCleanLog(`✅ 清理完成: 检测 ${data.checked} 个, 健康 ${healthy}, 失效 ${expired}, 错误 ${error}`);
+          
+          // 如果有错误，显示详情
+          if (error > 0) {
+            const errors = data.results.filter(r => r.status === 'error');
+            console.log('检测错误详情:', errors);
+          }
+          
+          loadKeys();
+          loadStats();
+          
+          // 更新下次执行时间
+          if (document.getElementById('autoCleanEnabled').checked) {
+            const intervalMinutes = parseInt(document.getElementById('cleanInterval').value);
+            const interval = intervalMinutes * 60 * 1000;
+            const nextRun = new Date(Date.now() + interval);
+            localStorage.setItem('nextCleanTime', nextRun.toISOString());
+            updateAutoCleanStatus();
+          }
+        } else {
+          addCleanLog(`❌ 清理失败: ${data.error}`);
+        }
+      } catch (err) {
+        addCleanLog(`❌ 清理出错: ${err.message}`);
+      }
+    }
+
+    function addCleanLog(message) {
+      const logs = JSON.parse(localStorage.getItem('cleanLogs') || '[]');
+      const log = {
+        time: new Date().toLocaleString('zh-CN'),
+        message: message
+      };
+      logs.unshift(log);
+      
+      // 只保留最近50条
+      if (logs.length > 50) {
+        logs.splice(50);
+      }
+      
+      localStorage.setItem('cleanLogs', JSON.stringify(logs));
+      loadCleanLogs();
+    }
+
+    function loadCleanLogs() {
+      const logs = JSON.parse(localStorage.getItem('cleanLogs') || '[]');
+      const container = document.getElementById('cleanLogList');
+      
+      if (logs.length === 0) {
+        container.innerHTML = '<p style="margin: 0; font-style: italic; color: #999;">暂无清理记录</p>';
+        return;
+      }
+      
+      container.innerHTML = logs.map(log => 
+        `<div style="padding: 8px; border-bottom: 1px solid #eee;">
+          <span style="color: #999; font-size: 12px;">${log.time}</span>
+          <span style="margin-left: 10px;">${log.message}</span>
+        </div>`
+      ).join('');
+    }
+
+    function clearCleanLogs() {
+      if (!confirm('确定清空所有日志？')) return;
+      localStorage.removeItem('cleanLogs');
+      loadCleanLogs();
+    }
+
+    // 初始化 - 先检查是否需要初始化
+    (async function init() {
+      const initialized = await checkInitStatus();
+      
+      if (initialized) {
+        // 已初始化，检查是否有 token
+        const token = getAdminToken();
+        if (!token) {
+          // 没有 token，显示登录框
+          showLoginModal();
+        } else {
+          // 有 token，尝试加载数据
+          try {
+            await loadStats();
+            loadCodes();
+            loadAutoCleanSettings();
+            setInterval(loadStats, 30000);
+          } catch (err) {
+            // token 无效或过期，显示登录框
+            console.error('加载失败:', err);
+            showLoginModal();
+          }
+        }
+      }
+      // 如果未初始化，checkInitStatus 已经自动显示初始化框了
+    })();
+  </script>
+</body>
+</html>

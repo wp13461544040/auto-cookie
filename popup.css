@@ -1,0 +1,263 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  width: 320px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 14px;
+  color: #333;
+  background: #fff;
+}
+
+.container {
+  padding: 16px;
+}
+
+/* Header (7.12) */
+.header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.logo {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+
+h1 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+/* Status area (7.11) */
+.status {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: #f5f5f5;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 14px;
+  min-height: 58px;
+  border-left: 3px solid transparent;
+  transition: background-color 0.2s, border-color 0.2s;
+}
+
+.status-idle {
+  background: #f5f5f5;
+  border-color: #ccc;
+}
+
+/* Loading state (7.7) */
+.status-loading {
+  background: #fff8e1;
+  border-color: #ffa000;
+}
+
+/* Success state (7.8) */
+.status-success {
+  background: #e8f5e9;
+  border-color: #43a047;
+}
+
+/* Error state (7.9) */
+.status-error {
+  background: #ffebee;
+  border-color: #e53935;
+}
+
+.status-icon {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1px;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ccc;
+  display: inline-block;
+  transition: background-color 0.2s;
+}
+
+.status-loading .status-dot { display: none; }
+.status-success .status-dot { background: #43a047; display: inline-block; }
+.status-error .status-dot   { background: #e53935; display: inline-block; }
+
+/* Spinner animation */
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #ffa000;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  display: inline-block;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.status-text {
+  flex: 1;
+  min-width: 0;
+}
+
+#statusMessage {
+  font-size: 13px;
+  line-height: 1.4;
+  color: #333;
+  word-break: break-word;
+}
+
+.status-success #statusMessage { color: #2e7d32; }
+.status-error   #statusMessage { color: #c62828; }
+
+.remaining-uses {
+  font-size: 12px;
+  color: #666;
+  margin-top: 4px;
+}
+
+/* Switch button (7.4) */
+.btn-primary {
+  width: 100%;
+  padding: 11px;
+  background: #1a73e8;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s, opacity 0.2s;
+  line-height: 1;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #1558b0;
+}
+
+.btn-primary:active:not(:disabled) {
+  background: #0d47a1;
+}
+
+/* Disabled / loading state (7.7) */
+.btn-primary:disabled {
+  background: #9e9e9e;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+/* Footer / configure link (7.10) */
+.footer {
+  margin-top: 12px;
+  text-align: center;
+}
+
+.footer a {
+  color: #1a73e8;
+  text-decoration: none;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.footer a:hover {
+  text-decoration: underline;
+}
+
+/* Mode selector */
+.mode-selector {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 4px;
+  background: #f5f5f5;
+  border-radius: 6px;
+}
+
+.mode-option {
+  flex: 1;
+  text-align: center;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background-color 0.2s;
+  user-select: none;
+}
+
+.mode-option input[type="radio"] {
+  display: none;
+}
+
+.mode-option:hover {
+  background: #ebebeb;
+}
+
+.mode-option input[type="radio"]:checked + span {
+  font-weight: 600;
+}
+
+.mode-option:has(input[type="radio"]:checked) {
+  background: #1a73e8;
+  color: #fff;
+}
+
+.mode-option:has(input[type="radio"]:checked):hover {
+  background: #1558b0;
+}
+
+/* Local login form */
+.local-login-form {
+  margin-bottom: 14px;
+  padding: 12px;
+  background: #f9f9f9;
+  border-radius: 6px;
+  border: 1px solid #e0e0e0;
+}
+
+.local-login-form label {
+  display: block;
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+
+.local-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #d0d0d0;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: 'Courier New', monospace;
+  margin-bottom: 10px;
+  transition: border-color 0.2s;
+}
+
+.local-input:focus {
+  outline: none;
+  border-color: #1a73e8;
+}
+
+.local-input::placeholder {
+  color: #999;
+}
+
+.local-login-form .btn-primary {
+  margin-top: 0;
+}
