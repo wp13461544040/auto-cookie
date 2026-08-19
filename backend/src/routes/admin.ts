@@ -4,14 +4,10 @@ import { query } from '../database';
 import { createActivationCode, listActivationCodes, disableCode } from '../generator/codeGenerator';
 import * as https from 'https';
 import * as http from 'http';
+import { HttpsProxyAgent } from 'https-proxy-agent';
+import { SocksProxyAgent } from 'socks-proxy-agent';
 
 const router = Router();
-
-// 使用require加载ESM代理库
-// @ts-ignore
-const HttpsProxyAgent = require('https-proxy-agent').HttpsProxyAgent;
-// @ts-ignore
-const SocksProxyAgent = require('socks-proxy-agent').SocksProxyAgent;
 
 /**
  * 使用代理执行 HTTPS GET 请求
