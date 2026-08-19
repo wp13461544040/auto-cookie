@@ -18,6 +18,26 @@ import {
 
 const app = express();
 
+// 静态文件服务 - 提供前端页面
+const staticPath = path.join(__dirname, '../../');
+app.use(express.static(staticPath, {
+  index: false, // 不自动返回 index.html
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.html')) {
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    }
+  }
+}));
+
+// 管理后台页面路由
+app.get('/admin.html', (req, res) => {
+  res.sendFile(path.join(staticPath, 'admin.html'));
+});
+
+app.get('/admin', (req, res) => {
+  res.redirect('/admin.html');
+});
+
 // 安全头 — 满足 req 4.5 / 8.7（管理页面需要放宽 CSP）
 app.use(helmet({
   contentSecurityPolicy: false,
