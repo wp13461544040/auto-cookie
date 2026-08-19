@@ -1,0 +1,211 @@
+=== Auto-Cookie 生产环境部署指南 ===
+
+【一键部署】
+
+方法1：完整部署（推荐）
+sudo bash deploy.sh
+
+方法2：快速部署（国内服务器）
+sudo bash deploy-simple.sh
+
+
+【手动部署步骤】
+
+1. 安装 Docker 和 Docker Compose
+   curl -fsSL https://get.docker.com | bash
+   curl -L "https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+   chmod +x /usr/local/bin/docker-compose
+
+2. 安装 Node.js 18
+   curl -fsSL https://deb.nodesource.com/setup_18.x | bash
+   apt install -y nodejs
+
+3. 构建项目
+   cd backend
+   npm install
+   npm run build
+   cd ..
+
+4. 启动服务
+   docker-compose up -d
+
+5. 运行数据库迁移
+   docker-compose exec backend npm run migrate
+
+
+【环境配置】
+
+修改 .env 文件：
+- DB_PASSWORD: 修改数据库密码
+- DB_ROOT_PASSWORD: 修改 root 密码
+
+修改 backend/.env 文件：
+- ADMIN_PASSWORD: 管理员密码（首次访问自动设置）
+- ADMIN_ALLOWED_IPS: IP 白名单（生产环境必须配置）
+
+
+【HTTPS 配置】
+
+1. 获取 SSL 证书（Let's Encrypt）
+   apt install certbot
+   certbot certonly --standalone -d your-domain.com
+
+2. 配置 backend/.env
+   TLS_KEY_PATH=/etc/letsencrypt/live/your-domain.com/privkey.pem
+   TLS_CERT_PATH=/etc/letsencrypt/live/your-domain.com/fullchain.pem
+   HTTPS_PORT=3443
+
+3. 修改 docker-compose.yml 端口映射
+   ports:
+     - '3443:3443'
+
+4. 重启服务
+   docker-compose restart backend
+
+
+【使用 Nginx 反向代理】
+
+1. 安装 Nginx
+   apt install nginx
+
+2. 创建配置 /etc/nginx/sites-available/auto-cookie
+   
+server {
+    listen 80;
+    server_name your-domain.com;
+    return 301 https://$server_name$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name your-domain.com;
+    
+    ssl_certificate /etc/letsencrypt/live/your-domain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/your-domain.com/privkey.pem;
+    
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+3. 启用配置
+   ln -s /etc/nginx/sites-available/auto-cookie /etc/nginx/sites-enabled/
+   nginx -t
+   systemctl reload nginx
+
+
+【防火墙配置】
+
+ufw allow 22/tcp    # SSH
+ufw allow 80/tcp    # HTTP
+ufw allow 443/tcp   # HTTPS
+ufw enable
+
+
+【常用运维命令】
+
+# 查看服务状态
+docker-compose ps
+
+# 查看日志
+docker-compose logs -f
+docker-compose logs -f backend
+
+# 重启服务
+docker-compose restart
+docker-compose restart backend
+
+# 停止服务
+docker-compose down
+
+# 更新代码
+bash update.sh
+
+# 进入容器
+docker-compose exec backend sh
+
+# 数据库备份
+docker-compose exec db mysqldump -uroot -p$DB_ROOT_PASSWORD claude_switcher > backup_$(date +%Y%m%d).sql
+
+# 数据库恢复
+docker-compose exec -T db mysql -uroot -p$DB_ROOT_PASSWORD claude_switcher < backup.sql
+
+
+【监控配置】
+
+1. 设置日志轮转 /etc/logrotate.d/auto-cookie
+/var/log/auto-cookie/*.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+}
+
+2. 配置告警（可选）
+   - 使用 Prometheus + Grafana
+   - 或使用阿里云/腾讯云监控服务
+
+
+【性能优化】
+
+1. 数据库优化
+   - 定期清理日志表
+   - 添加索引
+   - 配置 MySQL 缓冲池大小
+
+2. 应用优化
+   - 启用 API 缓存
+   - 配置 CDN（静态文件）
+   - 使用 Redis 缓存（可选）
+
+3. 系统优化
+   - 调整内核参数
+   - 配置 swap
+   - 限制进程资源
+
+
+【安全加固】
+
+1. 修改默认端口
+2. 配置 IP 白名单
+3. 启用 fail2ban
+4. 定期更新系统和依赖
+5. 定期备份数据
+6. 配置日志审计
+
+
+【故障排查】
+
+# 容器无法启动
+docker-compose logs backend
+docker-compose logs db
+
+# 数据库连接失败
+docker-compose exec backend ping db
+docker-compose exec db mysql -uroot -p
+
+# 端口被占用
+netstat -tlnp | grep 3000
+lsof -i :3000
+
+# 磁盘空间不足
+df -h
+docker system prune -a
+
+# 查看容器资源使用
+docker stats
+
+
+【联系支持】
+
+GitHub: https://github.com/wp13461544040/auto-cookie
+Issues: https://github.com/wp13461544040/auto-cookie/issues
