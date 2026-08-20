@@ -381,7 +381,8 @@
   </div>
 
   <script>
-    const API_BASE = 'http://localhost:3001/admin';
+    // 使用相对路径，自动适配部署环境
+    const API_BASE = '/admin';
     let autoCleanTimer = null;
 
     // 从 localStorage 获取管理员 token
