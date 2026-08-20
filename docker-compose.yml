@@ -2,7 +2,7 @@ services:
   backend:
     build: ./backend
     ports:
-      - '3000:3000'
+      - '5000:3000'
     environment:
       PORT: 3000
       DB_HOST: db
