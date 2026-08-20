@@ -815,7 +815,7 @@
 
     async function checkInitStatus() {
       try {
-        const response = await fetch('http://localhost:3001/admin/init/check');
+        const response = await fetch('/admin/init/check');
         const data = await response.json();
         
         if (data.success && !data.initialized) {
@@ -855,7 +855,7 @@
 
       try {
         // 调用初始化接口
-        const response = await fetch('http://localhost:3001/admin/init', {
+        const response = await fetch('/admin/init', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ username, password })
@@ -869,7 +869,7 @@
           // 自动登录
           setTimeout(async () => {
             try {
-              const loginResponse = await fetch('http://localhost:3001/admin/login', {
+              const loginResponse = await fetch('/admin/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username, password })
@@ -919,7 +919,7 @@
 
       try {
         // 调用登录接口
-        const response = await fetch('http://localhost:3001/admin/login', {
+        const response = await fetch('/admin/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ username, password })
@@ -984,7 +984,7 @@
         // 调用登出接口
         if (token) {
           try {
-            await fetch('http://localhost:3001/admin/logout', {
+            await fetch('/admin/logout', {
               method: 'POST',
               headers: { 
                 'Content-Type': 'application/json',
