@@ -30,7 +30,8 @@ app.use(cors());
 // 在 Docker 容器中，静态文件需要通过 volume 挂载或复制到容器
 // 这里配置为从项目根目录提供静态文件
 app.get('/admin.html', (req, res) => {
-  const adminPath = path.join(__dirname, '../../admin.html');
+  // __dirname 是 /app/dist，向上一级到 /app
+  const adminPath = path.join(__dirname, '../admin.html');
   res.sendFile(adminPath, (err) => {
     if (err) {
       console.error('Failed to send admin.html:', err);
@@ -44,7 +45,7 @@ app.get('/admin', (req, res) => {
 });
 
 // 提供其他静态文件（CSS、JS、图标等）
-app.use(express.static(path.join(__dirname, '../../'), {
+app.use(express.static(path.join(__dirname, '../'), {
   index: false,
   setHeaders: (res, filePath) => {
     if (filePath.endsWith('.html')) {
