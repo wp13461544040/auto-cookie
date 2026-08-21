@@ -142,94 +142,67 @@ export async function validateAndUseCode(
     return { success: false, error: 'No remaining uses for this activation code', reason: 'no_uses_left' };
   }
 
-  // Step 6: 从全局未使用的 session_keys 中选择一个健康的
-  // 条件：activationCode IS NULL（未绑定）或 isActive = FALSE（已失效，可重新分配）
-  // 优先选择从未使用过的（activationCode IS NULL AND usedCount = 0）
-  const maxRetries = 10; // 最多尝试 10 个 key
-  let attempts = 0;
-  let sessionKey: string | null = null;
-  let selectedKeyId: number | null = null;
+  // Step 6: 从全局未使用的 session_keys 中选择一个
+  // 服务器无外网环境，跳过健康检查，直接分配
+  const keyRows = await query<RowDataPacket[]>(
+    `SELECT id, sessionKey, anonymousId, deviceId, routingHint, cfBm, cfUvid 
+     FROM session_keys 
+     WHERE (activationCode IS NULL OR isActive = FALSE) 
+     ORDER BY 
+       CASE 
+         WHEN activationCode IS NULL AND usedCount = 0 THEN 1
+         WHEN activationCode IS NULL THEN 2
+         ELSE 3
+       END,
+       id ASC
+     LIMIT 1 
+     FOR UPDATE`,
+    []
+  );
 
-  while (attempts < maxRetries && !sessionKey) {
-    attempts++;
-
-    // 优先级：1) 未绑定且未使用 2) 未绑定但可能检测过 3) 已失效可重新分配
-    const keyRows = await query<RowDataPacket[]>(
-      `SELECT id, sessionKey, anonymousId, deviceId, routingHint, cfBm, cfUvid 
-       FROM session_keys 
-       WHERE (activationCode IS NULL OR isActive = FALSE) 
-       AND (lastCheckStatus IS NULL OR lastCheckStatus != 'expired')
-       ORDER BY 
-         CASE 
-           WHEN activationCode IS NULL AND usedCount = 0 THEN 1
-           WHEN activationCode IS NULL THEN 2
-           ELSE 3
-         END,
-         id ASC
-       LIMIT 1 
-       FOR UPDATE`,
-      []
-    );
-
-    if (keyRows.length === 0) {
-      // 没有可用 key 了
-      break;
-    }
-
-    const keyRow = keyRows[0] as {
-      id: number;
-      sessionKey: string;
-      anonymousId?: string;
-      deviceId?: string;
-      routingHint?: string;
-      cfBm?: string;
-      cfUvid?: string;
-    };
-
-    // 清洗 sessionKey
-    const raw = keyRow.sessionKey.trim();
-    const cleanKey = raw.includes('=') ? raw.split('=').slice(1).join('=') : raw;
-
-    // 健康检查
-    const healthStatus = await checkSessionKeyHealth(cleanKey, keyRow);
-
-    if (healthStatus === 'healthy') {
-      // 健康，使用这个 key - 原子性更新绑定
-      const bindResult = await query<ResultSetHeader>(
-        `UPDATE session_keys 
-         SET activationCode = ?, isActive = TRUE, lastUsedAt = ?, usedCount = usedCount + 1, 
-             lastCheckStatus = 'healthy', lastCheckedAt = ?
-         WHERE id = ? AND (activationCode IS NULL OR isActive = FALSE)`,
-        [activationCode, toMySQLDateTime(now), toMySQLDateTime(now), keyRow.id]
-      );
-
-      if ((bindResult as ResultSetHeader).affectedRows > 0) {
-        // 成功绑定
-        sessionKey = cleanKey;
-        selectedKeyId = keyRow.id;
-      } else {
-        // 被其他请求抢先绑定了，继续尝试下一个
-        console.log(`[validateAndUseCode] SessionKey ${keyRow.id} already bound by another request, trying next...`);
-      }
-    } else {
-      // 失效或错误，标记状态
-      await query<ResultSetHeader>(
-        'UPDATE session_keys SET lastCheckStatus = ?, lastCheckedAt = ?, isActive = FALSE WHERE id = ?',
-        [healthStatus, toMySQLDateTime(now), keyRow.id]
-      );
-      console.log(`[validateAndUseCode] SessionKey ${keyRow.id} marked as ${healthStatus}, trying next...`);
-    }
-  }
-
-  if (!sessionKey || !selectedKeyId) {
+  if (keyRows.length === 0) {
     // 回滚 usedCount
     await query<ResultSetHeader>(
       'UPDATE `activation_codes` SET `usedCount` = `usedCount` - 1 WHERE `code` = ?',
       [activationCode]
     );
     await logUsage({ activationCode, ipAddress, userAgent, success: false, errorReason: 'no_uses_left' });
-    return { success: false, error: 'No healthy session keys available', reason: 'no_uses_left' };
+    return { success: false, error: 'No session keys available', reason: 'no_uses_left' };
   }
+
+  const keyRow = keyRows[0] as {
+    id: number;
+    sessionKey: string;
+    anonymousId?: string;
+    deviceId?: string;
+    routingHint?: string;
+    cfBm?: string;
+    cfUvid?: string;
+  };
+
+  // 清洗 sessionKey
+  const raw = keyRow.sessionKey.trim();
+  const sessionKey = raw.includes('=') ? raw.split('=').slice(1).join('=') : raw;
+
+  // 绑定到激活码（无健康检查）
+  const bindResult = await query<ResultSetHeader>(
+    `UPDATE session_keys 
+     SET activationCode = ?, isActive = TRUE, lastUsedAt = ?, usedCount = usedCount + 1
+     WHERE id = ? AND (activationCode IS NULL OR isActive = FALSE)`,
+    [activationCode, toMySQLDateTime(now), keyRow.id]
+  );
+
+  if ((bindResult as ResultSetHeader).affectedRows === 0) {
+    // 被其他请求抢先绑定了
+    await query<ResultSetHeader>(
+      'UPDATE `activation_codes` SET `usedCount` = `usedCount` - 1 WHERE `code` = ?',
+      [activationCode]
+    );
+    await logUsage({ activationCode, ipAddress, userAgent, success: false, errorReason: 'no_uses_left' });
+    return { success: false, error: 'Session key allocation conflict', reason: 'no_uses_left' };
+  }
+
+  const sessionKeyId = keyRow.id;
 
   const remainingUses = code.maxUses - code.usedCount - 1;
 
@@ -251,5 +224,19 @@ export async function logUsage(input: CreateUsageLogInput): Promise<void> {
       input.success,
       input.errorReason ?? null,
     ]
+  );
+}
+
+/**
+ * Mark a sessionKey as invalid (expired)
+ * Called by client when validation fails
+ */
+export async function markSessionKeyAsInvalid(sessionKey: string): Promise<void> {
+  const now = new Date();
+  await query<ResultSetHeader>(
+    `UPDATE session_keys 
+     SET isActive = FALSE, lastCheckStatus = 'expired', lastCheckedAt = ?
+     WHERE sessionKey = ? OR sessionKey = CONCAT('sessionKey=', ?)`,
+    [toMySQLDateTime(now), sessionKey, sessionKey]
   );
 }

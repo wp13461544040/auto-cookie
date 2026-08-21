@@ -61,4 +61,35 @@ router.post('/session-key', async (req: Request, res: Response): Promise<void> =
   }
 });
 
+/**
+ * POST /api/session-key/report-invalid
+ * 客户端报告 sessionKey 验证失败，标记为失效
+ *
+ * Body: { sessionKey: string }
+ * Success: 200 { success: true }
+ */
+router.post('/session-key/report-invalid', async (req: Request, res: Response): Promise<void> => {
+  const { sessionKey } = req.body as { sessionKey?: unknown };
+
+  if (!sessionKey || typeof sessionKey !== 'string') {
+    res.status(400).json({
+      success: false,
+      error: 'sessionKey is required',
+    });
+    return;
+  }
+
+  try {
+    const { markSessionKeyAsInvalid } = await import('../services/activationCodeService');
+    await markSessionKeyAsInvalid(sessionKey);
+    res.status(200).json({ success: true });
+  } catch (err) {
+    console.error('POST /api/session-key/report-invalid error:', err);
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+    });
+  }
+});
+
 export default router;

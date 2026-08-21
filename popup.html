@@ -27,14 +27,14 @@
 
     <!-- Local login form (hidden by default) -->
     <div id="localLoginForm" class="local-login-form" hidden>
-      <label for="localSessionKey">输入 sessionKey：</label>
-      <input 
-        type="text" 
+      <label for="localSessionKey">输入 Cookies (JSON格式)：</label>
+      <textarea 
         id="localSessionKey" 
         class="local-input"
-        placeholder="sessionKey=sk-ant-sid02-xxxxx"
+        placeholder='{"sessionKey": "sk-ant-sid02-xxx", "__cf_bm": "xxx", "_cfuvid": "xxx"}'
         autocomplete="off"
-      />
+        rows="6"
+      ></textarea>
       <button id="localLoginButton" class="btn-primary">
         登录
       </button>

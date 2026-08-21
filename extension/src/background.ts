@@ -152,7 +152,27 @@ async function switchAccount(activationCode: string): Promise<SwitchResult> {
     // Step 2: Set new sessionKey cookie
     await setSessionKeyCookie(sessionKey);
 
-    // Step 3: Update storage cache (6.15)
+    // Step 3: Verify sessionKey by calling Claude API
+    const isValid = await verifySessionKey(sessionKey);
+    
+    if (!isValid) {
+      // Report to backend that this key is invalid
+      try {
+        await fetch(`${apiEndpoint}/api/session-key/report-invalid`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionKey }),
+        }).catch(() => {/* ignore report errors */});
+      } catch {/* ignore */}
+      
+      return {
+        success: false,
+        error: 'SessionKey 验证失败，请重试',
+        reason: 'expired',
+      };
+    }
+
+    // Step 4: Update storage cache (6.15)
     await chrome.storage.local.set({
       lastSwitchTime: new Date().toISOString(),
       remainingUses,
@@ -239,6 +259,44 @@ async function setSessionKeyCookie(sessionKey: string): Promise<void> {
     throw new Error(
       `设置 sessionKey cookie 失败: ${err instanceof Error ? err.message : String(err)}`
     );
+  }
+}
+
+// ─── Verify SessionKey (client-side validation) ──────────────────────────────
+
+async function verifySessionKey(sessionKey: string): Promise<boolean> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+    let response: Response;
+    try {
+      response = await fetch('https://claude.ai/api/account?statsig_hashing_algorithm=djb2', {
+        method: 'GET',
+        headers: {
+          'accept': '*/*',
+          'accept-language': 'en-US,en;q=0.9',
+          'cookie': `sessionKey=${sessionKey}; sessionKeyLC=${Date.now()}`,
+          'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        },
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
+
+    const contentType = response.headers.get('content-type') || '';
+
+    // Valid: 200 + JSON response
+    if (response.status === 200 && contentType.includes('application/json')) {
+      return true;
+    }
+
+    // Invalid: redirected to login (HTML) or 401/403
+    return false;
+  } catch (err: unknown) {
+    console.error('verifySessionKey error:', err);
+    return false;
   }
 }
 

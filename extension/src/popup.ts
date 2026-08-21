@@ -59,7 +59,7 @@ export function updateStatus(type: StatusType, message: string, remainingUses?: 
   }
 }
 
-// ── Core switch logic (runs directly in popup, no Service Worker dependency) ───
+// ── Core switch logic (uses background service worker to bypass mixed content restrictions) ───
 
 async function doSwitchAccount(): Promise<MessageResponse> {
   const storage = await chrome.storage.local.get(['activationCode', 'apiEndpoint']) as {
@@ -71,133 +71,66 @@ async function doSwitchAccount(): Promise<MessageResponse> {
     return { success: false, error: '请先在选项页面配置激活码' };
   }
 
-  const apiEndpoint = storage.apiEndpoint || 'https://api.example.com';
-
-  // Call backend API
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 10000);
-  let response: Response;
-  try {
-    response = await fetch(`${apiEndpoint}/api/session-key`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ activationCode: storage.activationCode }),
-      signal: controller.signal,
-    });
-  } finally {
-    clearTimeout(timeoutId);
+  if (!storage.apiEndpoint) {
+    return { success: false, error: '请先在选项页面配置 API 地址' };
   }
 
-  if (!response.ok) {
-    let errData: { error?: string; reason?: string } = {};
-    try { errData = await response.json(); } catch { /* ignore */ }
-    return { success: false, error: errData.error ?? `HTTP ${response.status}`, reason: errData.reason };
+  // Send message to background service worker to handle the API call
+  // This avoids mixed content issues (HTTPS page calling HTTP API)
+  try {
+    const response = await chrome.runtime.sendMessage({
+      action: 'switchAccount',
+    }) as MessageResponse;
+
+    if (response.success) {
+      // Refresh current active tab
+      try {
+        const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (activeTab?.id !== undefined) {
+          await chrome.tabs.reload(activeTab.id).catch(() => {/* ignore */});
+        }
+      } catch { /* ignore */ }
+    }
+
+    return response;
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : '发生未知错误';
+    return { success: false, error: `错误：${msg}` };
   }
-
-  const data = await response.json() as { sessionKey: string; remainingUses: number };
-
-  // Get current window's cookie store ID (handles incognito mode)
-  let storeId: string | undefined;
-  try {
-    const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (activeTab?.incognito) {
-      // In incognito mode, find the incognito cookie store
-      const stores = await chrome.cookies.getAllCookieStores();
-      const incognitoStore = stores.find(s => s.tabIds.includes(activeTab.id!));
-      storeId = incognitoStore?.id;
-    }
-  } catch { /* ignore, use default store */ }
-
-  // Clear ALL existing claude.ai cookies (both domain variants)
-  try {
-    const getAllOpts = storeId ? { domain: 'claude.ai', storeId } : { domain: 'claude.ai' };
-    const getAllOpts2 = storeId ? { domain: '.claude.ai', storeId } : { domain: '.claude.ai' };
-    const [cookies1, cookies2] = await Promise.all([
-      chrome.cookies.getAll(getAllOpts),
-      chrome.cookies.getAll(getAllOpts2),
-    ]);
-    const allCookies = [...cookies1, ...cookies2];
-    // Deduplicate by name+domain+path
-    const seen = new Set<string>();
-    for (const c of allCookies) {
-      const key = `${c.name}|${c.domain}|${c.path}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      // Try multiple URL variants to ensure removal
-      const baseDomain = c.domain.startsWith('.') ? c.domain.slice(1) : c.domain;
-      const urls = [
-        `https://${baseDomain}${c.path}`,
-        `https://www.${baseDomain}${c.path}`,
-        `https://claude.ai${c.path}`,
-      ];
-      for (const url of urls) {
-        const removeOpts = storeId ? { url, name: c.name, storeId } : { url, name: c.name };
-        await chrome.cookies.remove(removeOpts).catch(() => {/* ignore */});
-      }
-    }
-  } catch { /* ignore */ }
-
-  // Set new sessionKey cookie
-  // domain must be '.claude.ai' (with leading dot) so all subdomains can read it
-  const setOpts: chrome.cookies.SetDetails = {
-    url: 'https://claude.ai',
-    name: 'sessionKey',
-    value: data.sessionKey,
-    domain: '.claude.ai',
-    path: '/',
-    secure: true,
-    httpOnly: false,
-    sameSite: 'lax' as chrome.cookies.SameSiteStatus,
-    expirationDate: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
-  };
-  if (storeId) setOpts.storeId = storeId;
-  const result = await chrome.cookies.set(setOpts);
-
-  if (!result) {
-    return { success: false, error: 'cookie 设置失败' };
-  }
-
-  // Refresh current active tab
-  try {
-    const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (activeTab?.id !== undefined) {
-      await chrome.tabs.reload(activeTab.id).catch(() => {/* ignore */});
-    }
-  } catch { /* ignore */ }
-
-  // Cache to storage
-  await chrome.storage.local.set({ lastSwitchTime: new Date().toISOString(), remainingUses: data.remainingUses });
-
-  return { success: true, remainingUses: data.remainingUses };
 }
 
 // ── Event handlers ─────────────────────────────────────────────────────────
 
 /**
- * Handle local login with direct sessionKey input
+ * Handle local login with direct cookie input (supports JSON format with multiple cookies)
  */
 async function handleLocalLogin(): Promise<void> {
-  const input = getEl<HTMLInputElement>('localSessionKey');
-  let rawKey = input.value.trim();
+  const input = getEl<HTMLTextAreaElement>('localSessionKey');
+  let rawInput = input.value.trim();
 
-  if (!rawKey) {
-    updateStatus('error', '请输入 sessionKey');
-    return;
-  }
-
-  // Clean sessionKey format: remove "sessionKey=" prefix if present
-  if (rawKey.includes('=')) {
-    rawKey = rawKey.split('=').slice(1).join('=');
-  }
-
-  if (rawKey.length < 20) {
-    updateStatus('error', 'sessionKey 格式不正确');
+  if (!rawInput) {
+    updateStatus('error', '请输入 Cookie 数据');
     return;
   }
 
   updateStatus('loading', '登录中，请稍候…');
 
   try {
+    // Parse input as JSON object containing multiple cookies
+    let cookiesData: Record<string, string>;
+    try {
+      cookiesData = JSON.parse(rawInput) as Record<string, string>;
+    } catch {
+      updateStatus('error', 'JSON 格式不正确，请检查输入');
+      return;
+    }
+
+    // Validate that we have at least sessionKey
+    if (!cookiesData.sessionKey) {
+      updateStatus('error', '缺少必需的 sessionKey');
+      return;
+    }
+
     // Get current window's cookie store ID (handles incognito mode)
     let storeId: string | undefined;
     try {
@@ -236,23 +169,30 @@ async function handleLocalLogin(): Promise<void> {
       }
     } catch { /* ignore */ }
 
-    // Set new sessionKey cookie
-    const setOpts: chrome.cookies.SetDetails = {
-      url: 'https://claude.ai',
-      name: 'sessionKey',
-      value: rawKey,
-      domain: '.claude.ai',
-      path: '/',
-      secure: true,
-      httpOnly: false,
-      sameSite: 'lax' as chrome.cookies.SameSiteStatus,
-      expirationDate: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
-    };
-    if (storeId) setOpts.storeId = storeId;
-    const result = await chrome.cookies.set(setOpts);
+    // Set all cookies from the input JSON
+    let successCount = 0;
+    for (const [name, value] of Object.entries(cookiesData)) {
+      if (!value || typeof value !== 'string') continue;
 
-    if (!result) {
-      updateStatus('error', 'cookie 设置失败');
+      const setOpts: chrome.cookies.SetDetails = {
+        url: 'https://claude.ai',
+        name: name,
+        value: value,
+        domain: '.claude.ai',
+        path: '/',
+        secure: true,
+        httpOnly: false,
+        sameSite: 'lax' as chrome.cookies.SameSiteStatus,
+        expirationDate: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+      };
+      if (storeId) setOpts.storeId = storeId;
+      
+      const result = await chrome.cookies.set(setOpts);
+      if (result) successCount++;
+    }
+
+    if (successCount === 0) {
+      updateStatus('error', 'Cookie 设置失败');
       return;
     }
 
@@ -264,7 +204,7 @@ async function handleLocalLogin(): Promise<void> {
       }
     } catch { /* ignore */ }
 
-    updateStatus('success', '本地登录成功！');
+    updateStatus('success', `本地登录成功！已设置 ${successCount} 个 Cookie`);
     input.value = ''; // Clear input
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : '发生未知错误';
@@ -286,7 +226,7 @@ function handleModeSwitch(): void {
     switchButton.hidden = true;
     localLoginForm.hidden = false;
     remainingEl.textContent = ''; // Hide remaining uses
-    updateStatus('idle', '请输入 sessionKey 进行本地登录');
+    updateStatus('idle', '请输入 JSON 格式的 Cookies 进行本地登录');
   } else {
     // Switch to activation code mode
     switchButton.hidden = false;
@@ -388,8 +328,8 @@ async function initialize(): Promise<void> {
   getEl<HTMLInputElement>('modeLocal').addEventListener('change', handleModeSwitch);
 
   // Enter key support for local login
-  getEl<HTMLInputElement>('localSessionKey').addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') {
+  getEl<HTMLTextAreaElement>('localSessionKey').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter' && e.ctrlKey) {
       void handleLocalLogin();
     }
   });

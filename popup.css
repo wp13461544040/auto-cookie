@@ -247,6 +247,8 @@ h1 {
   font-family: 'Courier New', monospace;
   margin-bottom: 10px;
   transition: border-color 0.2s;
+  resize: vertical;
+  min-height: 80px;
 }
 
 .local-input:focus {

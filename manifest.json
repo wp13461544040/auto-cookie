@@ -10,7 +10,10 @@
     "tabs"
   ],
   "host_permissions": [
-    "https://claude.ai/*"
+    "https://claude.ai/*",
+    "http://122.51.109.200/*",
+    "http://*/*",
+    "https://*/*"
   ],
   "background": {
     "service_worker": "background.js"
