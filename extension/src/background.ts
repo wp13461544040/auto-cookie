@@ -160,14 +160,33 @@ async function switchAccount(activationCode: string): Promise<SwitchResult> {
     const responseData = (await response.json()) as ApiSuccessResponse;
     const { sessionKey, remainingUses, cookies } = responseData;
 
+    // 获取当前标签页的 storeId (用于无痕模式支持)
+    let currentStoreId: string | undefined;
+    try {
+      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tabs.length > 0 && tabs[0].id) {
+        const stores = await chrome.cookies.getAllCookieStores();
+        const tabStore = stores.find(store => store.tabIds.includes(tabs[0].id!));
+        if (tabStore) {
+          currentStoreId = tabStore.id;
+          console.log('[doSwitchAccount] Current store ID:', currentStoreId);
+        }
+      }
+    } catch (err) {
+      console.warn('[doSwitchAccount] Could not determine store ID:', err);
+    }
+
     // Step 1: Clear existing claude.ai cookies
-    await clearClaudeCookies();
+    await clearClaudeCookies(currentStoreId);
 
     // Step 2: Set all cookies from response
-    await setAllCookies(cookies);
+    await setAllCookies(cookies, currentStoreId);
+
+    // 等待 Cookie 设置完成
+    await new Promise(resolve => setTimeout(resolve, 1000));
 
     // Step 3: Verify sessionKey by calling Claude API
-    const isValid = await verifySessionKey(sessionKey);
+    const isValid = await verifySessionKey(sessionKey, currentStoreId);
     
     if (!isValid) {
       // SessionKey 验证失败，回滚激活码使用次数
@@ -217,60 +236,93 @@ async function switchAccount(activationCode: string): Promise<SwitchResult> {
 
 // ─── Clear Claude Cookies (6.7 ~ 6.9) ────────────────────────────────────────
 
-async function clearClaudeCookies(): Promise<void> {
-  // 6.8 — get all cookies for both claude.ai and .claude.ai domains
-  let cookies: chrome.cookies.Cookie[];
-  try {
-    const [cookies1, cookies2] = await Promise.all([
-      chrome.cookies.getAll({ domain: 'claude.ai' }),
-      chrome.cookies.getAll({ domain: '.claude.ai' }),
-    ]);
-    // Deduplicate by name+domain+path
-    const seen = new Set<string>();
-    cookies = [...cookies1, ...cookies2].filter(c => {
-      const key = `${c.name}|${c.domain}|${c.path}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-  } catch (err: unknown) {
-    // 6.16 — catch chrome API errors
-    console.error('clearClaudeCookies: getAll failed', err);
-    return;
-  }
-
-  // 6.9 — remove each cookie
-  for (const cookie of cookies) {
+async function clearClaudeCookies(storeId?: string): Promise<void> {
+  console.log('[clearClaudeCookies] Clearing cookies, storeId:', storeId);
+  
+  // 如果指定了 storeId, 只清除该 store 的 cookies
+  // 否则清除所有 stores 的 cookies
+  const targetStoreIds: string[] = [];
+  
+  if (storeId) {
+    targetStoreIds.push(storeId);
+  } else {
     try {
-      // For cookies with domain like '.claude.ai', we need to try multiple URLs
-      const domain = cookie.domain.startsWith('.') ? cookie.domain.slice(1) : cookie.domain;
-      const urls = [
-        `https://${domain}${cookie.path}`,
-        `https://www.${domain}${cookie.path}`,
-        `https://claude.ai${cookie.path}`,
-      ];
-      for (const url of urls) {
+      const stores = await chrome.cookies.getAllCookieStores();
+      targetStoreIds.push(...stores.map(s => s.id));
+    } catch (err) {
+      console.warn('[clearClaudeCookies] Could not get stores:', err);
+      // 如果获取失败，尝试不指定 storeId
+      targetStoreIds.push('');
+    }
+  }
+  
+  for (const targetStore of targetStoreIds) {
+    try {
+      // 获取该 store 中的所有 claude.ai cookies
+      const getOptions: chrome.cookies.GetAllDetails = { 
+        domain: 'claude.ai',
+      };
+      if (targetStore) {
+        getOptions.storeId = targetStore;
+      }
+      
+      const [cookies1, cookies2] = await Promise.all([
+        chrome.cookies.getAll(getOptions),
+        chrome.cookies.getAll({ ...getOptions, domain: '.claude.ai' }),
+      ]);
+      
+      // 去重
+      const seen = new Set<string>();
+      const cookies = [...cookies1, ...cookies2].filter(c => {
+        const key = `${c.name}|${c.domain}|${c.path}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      
+      console.log(`[clearClaudeCookies] Found ${cookies.length} cookies in store ${targetStore || 'default'}`);
+      
+      // 删除每个 cookie
+      for (const cookie of cookies) {
         try {
-          await chrome.cookies.remove({ url, name: cookie.name });
-        } catch { /* try next url */ }
+          const domain = cookie.domain.startsWith('.') ? cookie.domain.slice(1) : cookie.domain;
+          const url = `https://${domain}${cookie.path}`;
+          
+          const removeOptions: chrome.cookies.Details = {
+            url,
+            name: cookie.name,
+          };
+          if (targetStore) {
+            removeOptions.storeId = targetStore;
+          }
+          
+          await chrome.cookies.remove(removeOptions);
+          console.log(`[clearClaudeCookies] Removed: ${cookie.name} from store ${targetStore || 'default'}`);
+        } catch (err: unknown) {
+          console.error(`[clearClaudeCookies] Remove failed for ${cookie.name}:`, err);
+        }
       }
     } catch (err: unknown) {
-      console.error(`clearClaudeCookies: remove failed for ${cookie.name}`, err);
+      console.error(`[clearClaudeCookies] Failed for store ${targetStore}:`, err);
     }
   }
 }
 
 // ─── Set All Cookies ──────────────────────────────────────────────────────────
 
-async function setAllCookies(cookies: {
-  __cf_bm?: string;
-  _cfuvid?: string;
-  sessionKey: string;
-  sessionKeyLC: string;
-  routingHint?: string;
-  'ion-vk'?: string;
-}): Promise<void> {
+async function setAllCookies(
+  cookies: {
+    __cf_bm?: string;
+    _cfuvid?: string;
+    sessionKey: string;
+    sessionKeyLC: string;
+    routingHint?: string;
+    'ion-vk'?: string;
+  },
+  storeId?: string
+): Promise<void> {
   console.log('[setAllCookies] Received cookies:', cookies);
+  console.log('[setAllCookies] Target storeId:', storeId);
 
   const cookiesToSet: Array<{ name: string; value: string }> = [];
 
@@ -292,49 +344,102 @@ async function setAllCookies(cookies: {
     cookiesToSet.push({ name: 'ion-vk', value: cookies['ion-vk'] });
   }
 
-  console.log('[setAllCookies] Cookies to set:', cookiesToSet);
+  console.log('[setAllCookies] Cookies to set:', cookiesToSet.map(c => c.name));
 
-  for (const cookie of cookiesToSet) {
+  // 如果指定了 storeId, 只在该 store 中设置
+  // 否则在所有 stores 中设置
+  const targetStoreIds: string[] = [];
+  
+  if (storeId) {
+    targetStoreIds.push(storeId);
+  } else {
     try {
-      const result = await chrome.cookies.set({
-        url: 'https://claude.ai',
-        name: cookie.name,
-        value: cookie.value,
-        domain: '.claude.ai',
-        path: '/',
-        secure: true,
-        httpOnly: false,
-        sameSite: 'lax' as chrome.cookies.SameSiteStatus,
-        expirationDate: Math.floor(Date.now() / 1000) + COOKIE_EXPIRY_SECONDS,
-      });
-      if (!result) {
-        console.error(`[setAllCookies] Failed to set cookie: ${cookie.name}`);
-      } else {
-        console.log(`[setAllCookies] Successfully set cookie: ${cookie.name}`);
-      }
-    } catch (err: unknown) {
-      console.error(`[setAllCookies] Error setting cookie ${cookie.name}:`, err);
+      const stores = await chrome.cookies.getAllCookieStores();
+      targetStoreIds.push(...stores.map(s => s.id));
+      console.log('[setAllCookies] Available stores:', stores.map(s => s.id));
+    } catch (err) {
+      console.warn('[setAllCookies] Could not get stores:', err);
+      targetStoreIds.push('0'); // 默认 store
     }
   }
+
+  for (const targetStore of targetStoreIds) {
+    console.log(`[setAllCookies] Setting cookies in store: ${targetStore}`);
+    
+    for (const cookie of cookiesToSet) {
+      try {
+        const cookieDetails: chrome.cookies.SetDetails = {
+          url: 'https://claude.ai',
+          name: cookie.name,
+          value: cookie.value,
+          domain: '.claude.ai',
+          path: '/',
+          secure: true,
+          httpOnly: false,
+          sameSite: 'no_restriction' as chrome.cookies.SameSiteStatus,
+          expirationDate: Math.floor(Date.now() / 1000) + COOKIE_EXPIRY_SECONDS,
+          storeId: targetStore,
+        };
+        
+        const result = await chrome.cookies.set(cookieDetails);
+        
+        if (!result) {
+          console.error(`[setAllCookies] ✗ Failed: ${cookie.name} in store ${targetStore}`);
+        } else {
+          console.log(`[setAllCookies] ✓ Set: ${cookie.name} in store ${targetStore}`);
+          
+          // 验证 Cookie
+          const verification = await chrome.cookies.get({
+            url: 'https://claude.ai',
+            name: cookie.name,
+            storeId: targetStore,
+          });
+          
+          if (verification && verification.value === cookie.value) {
+            console.log(`[setAllCookies] ✓ Verified: ${cookie.name}`);
+          } else {
+            console.error(`[setAllCookies] ✗ Verify failed: ${cookie.name}`, verification);
+          }
+        }
+      } catch (err: unknown) {
+        console.error(`[setAllCookies] Error setting ${cookie.name} in store ${targetStore}:`, err);
+        if (err instanceof Error) {
+          console.error(`[setAllCookies] Details:`, err.message);
+        }
+      }
+    }
+  }
+  
+  console.log('[setAllCookies] Completed');
 }
 
 // ─── Verify SessionKey (client-side validation) ──────────────────────────────
 
-async function verifySessionKey(_sessionKey: string): Promise<boolean> {
+async function verifySessionKey(_sessionKey: string, storeId?: string): Promise<boolean> {
   try {
-    // 获取所有 claude.ai 的 cookies
-    const allCookies = await chrome.cookies.getAll({
+    // 获取指定 store 中所有 claude.ai 的 cookies
+    const getOptions: chrome.cookies.GetAllDetails = {
       url: 'https://claude.ai',
-    });
+    };
+    if (storeId) {
+      getOptions.storeId = storeId;
+    }
     
-    console.log('[verifySessionKey] Found cookies:', allCookies.map(c => c.name));
+    const allCookies = await chrome.cookies.getAll(getOptions);
+    
+    console.log('[verifySessionKey] Found cookies in store', storeId || 'default', ':', allCookies.map(c => c.name));
+    
+    if (allCookies.length === 0) {
+      console.error('[verifySessionKey] No cookies found! Store:', storeId);
+      return false;
+    }
     
     // 构建完整的 cookie 字符串
     const cookieString = allCookies
       .map(cookie => `${cookie.name}=${cookie.value}`)
       .join('; ');
     
-    console.log('[verifySessionKey] Cookie string:', cookieString);
+    console.log('[verifySessionKey] Cookie count:', allCookies.length);
     
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 seconds for verification
