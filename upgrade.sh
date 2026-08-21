@@ -101,6 +101,100 @@ if [ -f "$BACKUP_DIR/backend.env" ]; then
     log_info "backend/.env 已恢复"
 fi
 
+# 检查 Node.js 和 npm
+check_nodejs() {
+    if ! command -v node &> /dev/null; then
+        log_error "Node.js 未安装"
+        return 1
+    fi
+    
+    if ! command -v npm &> /dev/null; then
+        log_error "npm 未安装"
+        return 1
+    fi
+    
+    NODE_VERSION=$(node -v | cut -d'v' -f2 | cut -d'.' -f1)
+    if [ "$NODE_VERSION" -lt 18 ]; then
+        log_warn "Node.js 版本过低 (当前: v$(node -v)), 需要 v18+"
+        return 1
+    fi
+    
+    return 0
+}
+
+# 安装 Node.js v18
+install_nodejs() {
+    log_step "安装 Node.js v18..."
+    
+    # 方法1: 使用官方包管理器
+    if command -v apt &> /dev/null; then
+        # 卸载旧版本
+        sudo apt remove -y nodejs npm 2>/dev/null || true
+        
+        # 使用 fnm (Fast Node Manager) 安装
+        if ! command -v fnm &> /dev/null; then
+            log_step "安装 fnm..."
+            curl -fsSL https://fnm.vercel.app/install | bash -s -- --skip-shell
+            export PATH="$HOME/.local/share/fnm:$PATH"
+            eval "$(fnm env --use-on-cd)"
+        fi
+        
+        if command -v fnm &> /dev/null; then
+            log_step "使用 fnm 安装 Node.js 18..."
+            fnm install 18
+            fnm use 18
+            fnm default 18
+        else
+            log_error "fnm 安装失败，尝试其他方法"
+            
+            # 方法2: 使用 nvm-like 直接下载
+            log_step "直接下载 Node.js 二进制..."
+            NODE_VERSION="18.20.5"
+            NODE_DISTRO="linux-x64"
+            NODE_URL="https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-${NODE_DISTRO}.tar.xz"
+            NODE_MIRROR_URL="https://npmmirror.com/mirrors/node/v${NODE_VERSION}/node-v${NODE_VERSION}-${NODE_DISTRO}.tar.xz"
+            
+            cd /tmp
+            if curl -fsSL "$NODE_MIRROR_URL" -o node.tar.xz || curl -fsSL "$NODE_URL" -o node.tar.xz; then
+                sudo mkdir -p /usr/local/lib/nodejs
+                sudo tar -xJf node.tar.xz -C /usr/local/lib/nodejs
+                sudo ln -sf /usr/local/lib/nodejs/node-v${NODE_VERSION}-${NODE_DISTRO}/bin/node /usr/local/bin/node
+                sudo ln -sf /usr/local/lib/nodejs/node-v${NODE_VERSION}-${NODE_DISTRO}/bin/npm /usr/local/bin/npm
+                sudo ln -sf /usr/local/lib/nodejs/node-v${NODE_VERSION}-${NODE_DISTRO}/bin/npx /usr/local/bin/npx
+                rm -f node.tar.xz
+                log_info "Node.js 安装完成"
+            else
+                log_error "Node.js 下载失败"
+                return 1
+            fi
+        fi
+    fi
+    
+    # 验证安装
+    export PATH="/usr/local/bin:$HOME/.local/share/fnm:$PATH"
+    if command -v node &> /dev/null && command -v npm &> /dev/null; then
+        log_info "Node.js $(node -v) 安装成功"
+        log_info "npm $(npm -v) 安装成功"
+        return 0
+    else
+        log_error "Node.js 安装验证失败"
+        return 1
+    fi
+}
+
+# 检查 Node.js 环境
+if ! check_nodejs; then
+    log_warn "Node.js 环境不满足要求，开始安装..."
+    if ! install_nodejs; then
+        log_error "Node.js 安装失败"
+        log_warn "请手动安装 Node.js v18+ 后重试"
+        log_warn "安装命令: curl -fsSL https://fnm.vercel.app/install | bash && fnm install 18"
+        exit 1
+    fi
+else
+    log_info "Node.js $(node -v) 环境正常"
+fi
+
 # 配置 npm 镜像
 npm config set registry https://registry.npmmirror.com 2>/dev/null || true
 
