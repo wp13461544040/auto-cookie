@@ -158,10 +158,12 @@ export async function validateAndUseCode(
 
   // Step 6: 从全局未使用的 session_keys 中选择一个
   // 服务器无外网环境，跳过健康检查，直接分配
+  // 排除：1) 已绑定且激活的 2) 已标记为失效的
   const keyRows = await query<RowDataPacket[]>(
     `SELECT id, sessionKey, email, uuid, anonymousId, deviceId, routingHint, cfBm, cfUvid 
      FROM session_keys 
      WHERE (activationCode IS NULL OR isActive = FALSE) 
+     AND (lastCheckStatus IS NULL OR lastCheckStatus != 'expired')
      ORDER BY 
        CASE 
          WHEN activationCode IS NULL AND usedCount = 0 THEN 1
@@ -269,15 +271,17 @@ export async function logUsage(input: CreateUsageLogInput): Promise<void> {
 /**
  * Mark a sessionKey as invalid (expired)
  * Called by client when validation fails
+ * 同时解绑激活码，允许重新分配
  */
 export async function markSessionKeyAsInvalid(sessionKey: string): Promise<void> {
   const now = new Date();
   await query<ResultSetHeader>(
     `UPDATE session_keys 
-     SET isActive = FALSE, lastCheckStatus = 'expired', lastCheckedAt = ?
+     SET isActive = FALSE, lastCheckStatus = 'expired', lastCheckedAt = ?, activationCode = NULL
      WHERE sessionKey = ? OR sessionKey = CONCAT('sessionKey=', ?)`,
     [toMySQLDateTime(now), sessionKey, sessionKey]
   );
+  console.log(`[markSessionKeyAsInvalid] Marked key as expired and unbound: ${sessionKey.substring(0, 20)}...`);
 }
 
 /**
