@@ -279,3 +279,17 @@ export async function markSessionKeyAsInvalid(sessionKey: string): Promise<void>
     [toMySQLDateTime(now), sessionKey, sessionKey]
   );
 }
+
+/**
+ * Rollback activation code usage count
+ * Called when client validation fails
+ */
+export async function rollbackActivationCodeUsage(activationCode: string): Promise<void> {
+  await query<ResultSetHeader>(
+    `UPDATE activation_codes 
+     SET usedCount = GREATEST(usedCount - 1, 0)
+     WHERE code = ?`,
+    [activationCode]
+  );
+  console.log(`[rollbackActivationCodeUsage] Rolled back usage for code: ${activationCode}`);
+}

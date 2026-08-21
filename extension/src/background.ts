@@ -170,7 +170,16 @@ async function switchAccount(activationCode: string): Promise<SwitchResult> {
     const isValid = await verifySessionKey(sessionKey);
     
     if (!isValid) {
-      // Report to backend that this key is invalid
+      // SessionKey 验证失败，回滚激活码使用次数
+      try {
+        await fetch(`${apiEndpoint}/api/session-key/rollback`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ activationCode: activationCode }),
+        }).catch(() => {/* ignore rollback errors */});
+      } catch {/* ignore */}
+
+      // 报告后端标记此 key 为失效
       try {
         await fetch(`${apiEndpoint}/api/session-key/report-invalid`, {
           method: 'POST',
@@ -181,7 +190,7 @@ async function switchAccount(activationCode: string): Promise<SwitchResult> {
       
       return {
         success: false,
-        error: 'SessionKey 验证失败，此账号已失效，请重试',
+        error: 'SessionKey 验证失败，此账号已失效，请重试获取新账号',
         reason: 'expired',
       };
     }

@@ -92,4 +92,35 @@ router.post('/session-key/report-invalid', async (req: Request, res: Response): 
   }
 });
 
+/**
+ * POST /api/session-key/rollback
+ * 回滚激活码使用次数（当验证失败时）
+ *
+ * Body: { activationCode: string }
+ * Success: 200 { success: true }
+ */
+router.post('/session-key/rollback', async (req: Request, res: Response): Promise<void> => {
+  const { activationCode } = req.body as { activationCode?: unknown };
+
+  if (!activationCode || typeof activationCode !== 'string') {
+    res.status(400).json({
+      success: false,
+      error: 'activationCode is required',
+    });
+    return;
+  }
+
+  try {
+    const { rollbackActivationCodeUsage } = await import('../services/activationCodeService');
+    await rollbackActivationCodeUsage(activationCode);
+    res.status(200).json({ success: true });
+  } catch (err) {
+    console.error('POST /api/session-key/rollback error:', err);
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+    });
+  }
+});
+
 export default router;
