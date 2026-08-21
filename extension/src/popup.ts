@@ -78,9 +78,12 @@ async function doSwitchAccount(): Promise<MessageResponse> {
   // Send message to background service worker to handle the API call
   // This avoids mixed content issues (HTTPS page calling HTTP API)
   try {
+    console.log('[doSwitchAccount] Sending message to background...');
     const response = await chrome.runtime.sendMessage({
       action: 'switchAccount',
     }) as MessageResponse;
+
+    console.log('[doSwitchAccount] Response from background:', response);
 
     if (response.success) {
       // Refresh current active tab
@@ -94,6 +97,7 @@ async function doSwitchAccount(): Promise<MessageResponse> {
 
     return response;
   } catch (err: unknown) {
+    console.error('[doSwitchAccount] Error:', err);
     const msg = err instanceof Error ? err.message : '发生未知错误';
     return { success: false, error: `错误：${msg}` };
   }
@@ -246,15 +250,19 @@ async function handleSwitchAccount(): Promise<void> {
   updateStatus('loading', '切换中，请稍候…');
 
   try {
+    console.log('[handleSwitchAccount] Starting account switch...');
     const response = await doSwitchAccount();
+    console.log('[handleSwitchAccount] Switch result:', response);
 
     if (response.success) {
       updateStatus('success', '账号切换成功！', response.remainingUses);
     } else {
       const errorMsg = mapErrorMessage(response.error, response.reason);
+      console.log('[handleSwitchAccount] Displaying error:', errorMsg);
       updateStatus('error', errorMsg);
     }
   } catch (err: unknown) {
+    console.error('[handleSwitchAccount] Caught error:', err);
     if (err instanceof Error && err.name === 'AbortError') {
       updateStatus('error', '请求超时，请检查网络连接');
     } else {
@@ -270,7 +278,12 @@ async function handleSwitchAccount(): Promise<void> {
 export function mapErrorMessage(error?: string, reason?: string): string {
   switch (reason) {
     case 'invalid_code':  return '无效的激活码，请检查配置';
-    case 'expired':       return '激活码已过期，请联系管理员';
+    case 'expired':       
+      // 检查错误信息判断是激活码过期还是 sessionKey 失效
+      if (error && error.includes('SessionKey')) {
+        return error; // 直接返回详细的错误信息
+      }
+      return '激活码已过期，请联系管理员';
     case 'no_uses_left':  return '激活码使用次数已耗尽';
     case 'disabled':      return '激活码已被禁用';
     default:              return error ?? '切换失败，请重试';

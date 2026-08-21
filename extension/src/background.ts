@@ -261,15 +261,29 @@ async function setAllCookies(cookies: {
   routingHint?: string;
   'ion-vk'?: string;
 }): Promise<void> {
-  const cookiesToSet = [
-    { name: 'sessionKey', value: cookies.sessionKey },
-    { name: 'sessionKeyLC', value: cookies.sessionKeyLC },
-  ];
+  console.log('[setAllCookies] Received cookies:', cookies);
 
-  if (cookies.__cf_bm) cookiesToSet.push({ name: '__cf_bm', value: cookies.__cf_bm });
-  if (cookies._cfuvid) cookiesToSet.push({ name: '_cfuvid', value: cookies._cfuvid });
-  if (cookies.routingHint) cookiesToSet.push({ name: 'routingHint', value: cookies.routingHint });
-  if (cookies['ion-vk']) cookiesToSet.push({ name: 'ion-vk', value: cookies['ion-vk'] });
+  const cookiesToSet: Array<{ name: string; value: string }> = [];
+
+  // Always set these
+  cookiesToSet.push({ name: 'sessionKey', value: cookies.sessionKey });
+  cookiesToSet.push({ name: 'sessionKeyLC', value: cookies.sessionKeyLC });
+
+  // Set optional cookies if they exist
+  if (cookies.__cf_bm) {
+    cookiesToSet.push({ name: '__cf_bm', value: cookies.__cf_bm });
+  }
+  if (cookies._cfuvid) {
+    cookiesToSet.push({ name: '_cfuvid', value: cookies._cfuvid });
+  }
+  if (cookies.routingHint) {
+    cookiesToSet.push({ name: 'routingHint', value: cookies.routingHint });
+  }
+  if (cookies['ion-vk']) {
+    cookiesToSet.push({ name: 'ion-vk', value: cookies['ion-vk'] });
+  }
+
+  console.log('[setAllCookies] Cookies to set:', cookiesToSet);
 
   for (const cookie of cookiesToSet) {
     try {
@@ -285,10 +299,12 @@ async function setAllCookies(cookies: {
         expirationDate: Math.floor(Date.now() / 1000) + COOKIE_EXPIRY_SECONDS,
       });
       if (!result) {
-        console.error(`Failed to set cookie: ${cookie.name}`);
+        console.error(`[setAllCookies] Failed to set cookie: ${cookie.name}`);
+      } else {
+        console.log(`[setAllCookies] Successfully set cookie: ${cookie.name}`);
       }
     } catch (err: unknown) {
-      console.error(`Error setting cookie ${cookie.name}:`, err);
+      console.error(`[setAllCookies] Error setting cookie ${cookie.name}:`, err);
     }
   }
 }

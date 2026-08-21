@@ -226,10 +226,10 @@ export async function validateAndUseCode(
 
   // 构造完整的 cookies 对象
   const cookies = {
+    sessionKey: sessionKey, // 必需字段
+    sessionKeyLC: Date.now().toString(), // 必需字段
     __cf_bm: keyRow.cfBm || undefined,
     _cfuvid: keyRow.cfUvid || undefined,
-    sessionKey: sessionKey,
-    sessionKeyLC: Date.now().toString(),
     routingHint: keyRow.routingHint || undefined,
     'ion-vk': undefined, // 可以从数据库扩展字段获取
   };
