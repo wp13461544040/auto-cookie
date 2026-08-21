@@ -320,8 +320,22 @@ async function setAllCookies(cookies: {
 
 // ─── Verify SessionKey (client-side validation) ──────────────────────────────
 
-async function verifySessionKey(sessionKey: string): Promise<boolean> {
+async function verifySessionKey(_sessionKey: string): Promise<boolean> {
   try {
+    // 获取所有 claude.ai 的 cookies
+    const allCookies = await chrome.cookies.getAll({
+      url: 'https://claude.ai',
+    });
+    
+    console.log('[verifySessionKey] Found cookies:', allCookies.map(c => c.name));
+    
+    // 构建完整的 cookie 字符串
+    const cookieString = allCookies
+      .map(cookie => `${cookie.name}=${cookie.value}`)
+      .join('; ');
+    
+    console.log('[verifySessionKey] Cookie string:', cookieString);
+    
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 seconds for verification
 
@@ -332,7 +346,7 @@ async function verifySessionKey(sessionKey: string): Promise<boolean> {
         headers: {
           'accept': '*/*',
           'accept-language': 'en-US,en;q=0.9',
-          'cookie': `sessionKey=${sessionKey}; sessionKeyLC=${Date.now()}`,
+          'cookie': cookieString,
           'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
           'anthropic-client-platform': 'web_claude_ai',
           'anthropic-client-version': '1.0.0',
@@ -345,15 +359,19 @@ async function verifySessionKey(sessionKey: string): Promise<boolean> {
 
     const contentType = response.headers.get('content-type') || '';
 
+    console.log('[verifySessionKey] Response status:', response.status, 'Content-Type:', contentType);
+
     // Valid: 200 + JSON response
     if (response.status === 200 && contentType.includes('application/json')) {
+      console.log('[verifySessionKey] ✓ SessionKey 验证通过');
       return true;
     }
 
     // Invalid: redirected to login (HTML) or 401/403
+    console.warn('[verifySessionKey] ✗ SessionKey 验证失败:', response.status, contentType);
     return false;
   } catch (err: unknown) {
-    console.error('verifySessionKey error:', err);
+    console.error('[verifySessionKey] Error:', err);
     return false;
   }
 }
