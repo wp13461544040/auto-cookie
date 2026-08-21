@@ -169,22 +169,98 @@ if docker compose version &> /dev/null; then
 fi
 
 # ==================== Node.js 安装 ====================
-if ! command -v node &> /dev/null; then
-    log_step "安装 Node.js 18..."
+
+# 检查 Node.js 和 npm
+check_nodejs() {
+    if ! command -v node &> /dev/null; then
+        return 1
+    fi
     
-    # 使用阿里云镜像
-    curl -fsSL https://mirrors.aliyun.com/nodesource/setup_18.x | bash -
-    apt install -y nodejs
+    if ! command -v npm &> /dev/null; then
+        return 1
+    fi
     
-    log_info "Node.js 安装完成: $(node -v)"
-else
     NODE_VERSION=$(node -v | cut -d'v' -f2 | cut -d'.' -f1)
     if [ "$NODE_VERSION" -lt 18 ]; then
-        log_warn "Node.js 版本过低，升级到 18..."
-        curl -fsSL https://mirrors.aliyun.com/nodesource/setup_18.x | bash -
-        apt install -y nodejs
+        return 1
     fi
-    log_info "Node.js 已安装: $(node -v)"
+    
+    return 0
+}
+
+# 安装 Node.js v18
+install_nodejs() {
+    log_step "安装 Node.js v18..."
+    
+    # 卸载旧版本
+    apt remove -y nodejs npm 2>/dev/null || true
+    apt autoremove -y 2>/dev/null || true
+    
+    # 使用 fnm (Fast Node Manager) 安装
+    if ! command -v fnm &> /dev/null; then
+        log_step "安装 fnm..."
+        curl -fsSL https://fnm.vercel.app/install | bash -s -- --skip-shell
+        export PATH="$HOME/.local/share/fnm:$PATH"
+        eval "$(fnm env --use-on-cd)" 2>/dev/null || true
+    fi
+    
+    if command -v fnm &> /dev/null; then
+        log_step "使用 fnm 安装 Node.js 18..."
+        fnm install 18
+        fnm use 18
+        fnm default 18
+        export PATH="$HOME/.local/share/fnm:$PATH"
+        eval "$(fnm env)" 2>/dev/null || true
+    else
+        log_warn "fnm 安装失败，使用备用方案"
+        
+        # 方法2: 直接下载 Node.js 二进制
+        log_step "直接下载 Node.js 二进制..."
+        NODE_VERSION="18.20.5"
+        NODE_DISTRO="linux-x64"
+        NODE_URL="https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-${NODE_DISTRO}.tar.xz"
+        NODE_MIRROR_URL="https://npmmirror.com/mirrors/node/v${NODE_VERSION}/node-v${NODE_VERSION}-${NODE_DISTRO}.tar.xz"
+        
+        cd /tmp
+        if curl -fsSL --connect-timeout 10 --max-time 60 "$NODE_MIRROR_URL" -o node.tar.xz 2>/dev/null || \
+           curl -fsSL --connect-timeout 10 --max-time 60 "$NODE_URL" -o node.tar.xz 2>/dev/null; then
+            mkdir -p /usr/local/lib/nodejs
+            tar -xJf node.tar.xz -C /usr/local/lib/nodejs
+            ln -sf /usr/local/lib/nodejs/node-v${NODE_VERSION}-${NODE_DISTRO}/bin/node /usr/local/bin/node
+            ln -sf /usr/local/lib/nodejs/node-v${NODE_VERSION}-${NODE_DISTRO}/bin/npm /usr/local/bin/npm
+            ln -sf /usr/local/lib/nodejs/node-v${NODE_VERSION}-${NODE_DISTRO}/bin/npx /usr/local/bin/npx
+            rm -f node.tar.xz
+            cd "$DEPLOY_DIR"
+            log_info "Node.js 安装完成"
+        else
+            log_error "Node.js 下载失败"
+            return 1
+        fi
+    fi
+    
+    # 验证安装
+    export PATH="/usr/local/bin:$HOME/.local/share/fnm:$PATH"
+    if command -v node &> /dev/null && command -v npm &> /dev/null; then
+        log_info "Node.js $(node -v) 安装成功"
+        log_info "npm $(npm -v) 安装成功"
+        return 0
+    else
+        log_error "Node.js 安装验证失败"
+        return 1
+    fi
+}
+
+# 检查并安装 Node.js
+if ! check_nodejs; then
+    log_warn "Node.js 环境不满足要求 (需要 v18+)"
+    if ! install_nodejs; then
+        log_error "Node.js 自动安装失败"
+        log_warn "请手动安装 Node.js v18+ 后重新运行"
+        log_warn "推荐安装方式: curl -fsSL https://fnm.vercel.app/install | bash && fnm install 18"
+        exit 1
+    fi
+else
+    log_info "Node.js $(node -v) 环境正常"
 fi
 
 # 配置 npm 国内镜像
