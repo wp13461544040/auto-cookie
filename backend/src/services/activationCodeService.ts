@@ -71,6 +71,20 @@ export interface ValidationResult {
   success: true;
   sessionKey: string;
   remainingUses: number;
+  cookies: {
+    __cf_bm?: string;
+    _cfuvid?: string;
+    sessionKey: string;
+    sessionKeyLC: string;
+    routingHint?: string;
+    'ion-vk'?: string;
+  };
+  metadata?: {
+    email?: string;
+    uuid?: string;
+    anonymousId?: string;
+    deviceId?: string;
+  };
 }
 
 export interface ValidationError {
@@ -145,7 +159,7 @@ export async function validateAndUseCode(
   // Step 6: 从全局未使用的 session_keys 中选择一个
   // 服务器无外网环境，跳过健康检查，直接分配
   const keyRows = await query<RowDataPacket[]>(
-    `SELECT id, sessionKey, anonymousId, deviceId, routingHint, cfBm, cfUvid 
+    `SELECT id, sessionKey, email, uuid, anonymousId, deviceId, routingHint, cfBm, cfUvid 
      FROM session_keys 
      WHERE (activationCode IS NULL OR isActive = FALSE) 
      ORDER BY 
@@ -173,6 +187,8 @@ export async function validateAndUseCode(
   const keyRow = keyRows[0] as {
     id: number;
     sessionKey: string;
+    email?: string;
+    uuid?: string;
     anonymousId?: string;
     deviceId?: string;
     routingHint?: string;
@@ -208,7 +224,30 @@ export async function validateAndUseCode(
 
   await logUsage({ activationCode, ipAddress, userAgent, success: true });
 
-  return { success: true, sessionKey, remainingUses };
+  // 构造完整的 cookies 对象
+  const cookies = {
+    __cf_bm: keyRow.cfBm || undefined,
+    _cfuvid: keyRow.cfUvid || undefined,
+    sessionKey: sessionKey,
+    sessionKeyLC: Date.now().toString(),
+    routingHint: keyRow.routingHint || undefined,
+    'ion-vk': undefined, // 可以从数据库扩展字段获取
+  };
+
+  const metadata = {
+    email: keyRow.email || undefined,
+    uuid: keyRow.uuid || undefined,
+    anonymousId: keyRow.anonymousId || undefined,
+    deviceId: keyRow.deviceId || undefined,
+  };
+
+  return { 
+    success: true, 
+    sessionKey, 
+    remainingUses,
+    cookies,
+    metadata,
+  };
 }
 
 /**

@@ -29,6 +29,20 @@ interface SwitchResult {
 interface ApiSuccessResponse {
   sessionKey: string;
   remainingUses: number;
+  cookies: {
+    __cf_bm?: string;
+    _cfuvid?: string;
+    sessionKey: string;
+    sessionKeyLC: string;
+    routingHint?: string;
+    'ion-vk'?: string;
+  };
+  metadata?: {
+    email?: string;
+    uuid?: string;
+    anonymousId?: string;
+    deviceId?: string;
+  };
 }
 
 interface ApiErrorResponse {
@@ -39,7 +53,7 @@ interface ApiErrorResponse {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const DEFAULT_API_ENDPOINT = 'https://api.example.com';
-const REQUEST_TIMEOUT_MS = 10_000;
+const REQUEST_TIMEOUT_MS = 30_000; // 30 seconds
 const COOKIE_EXPIRY_SECONDS = 30 * 24 * 60 * 60; // 30 days
 
 // ─── Message Listener (6.2) ───────────────────────────────────────────────────
@@ -144,13 +158,13 @@ async function switchAccount(activationCode: string): Promise<SwitchResult> {
     }
 
     const responseData = (await response.json()) as ApiSuccessResponse;
-    const { sessionKey, remainingUses } = responseData;
+    const { sessionKey, remainingUses, cookies } = responseData;
 
     // Step 1: Clear existing claude.ai cookies
     await clearClaudeCookies();
 
-    // Step 2: Set new sessionKey cookie
-    await setSessionKeyCookie(sessionKey);
+    // Step 2: Set all cookies from response
+    await setAllCookies(cookies);
 
     // Step 3: Verify sessionKey by calling Claude API
     const isValid = await verifySessionKey(sessionKey);
@@ -167,7 +181,7 @@ async function switchAccount(activationCode: string): Promise<SwitchResult> {
       
       return {
         success: false,
-        error: 'SessionKey 验证失败，请重试',
+        error: 'SessionKey 验证失败，此账号已失效，请重试',
         reason: 'expired',
       };
     }
@@ -237,28 +251,45 @@ async function clearClaudeCookies(): Promise<void> {
   }
 }
 
-// ─── Set SessionKey Cookie (6.10 & 6.11) ─────────────────────────────────────
+// ─── Set All Cookies ──────────────────────────────────────────────────────────
 
-async function setSessionKeyCookie(sessionKey: string): Promise<void> {
-  try {
-    const result = await chrome.cookies.set({
-      url: 'https://claude.ai',
-      name: 'sessionKey',
-      value: sessionKey,
-      domain: '.claude.ai',
-      path: '/',
-      secure: true,
-      httpOnly: false,
-      sameSite: 'lax' as chrome.cookies.SameSiteStatus,
-      expirationDate: Math.floor(Date.now() / 1000) + COOKIE_EXPIRY_SECONDS,
-    });
-    if (!result) {
-      throw new Error('chrome.cookies.set returned null');
+async function setAllCookies(cookies: {
+  __cf_bm?: string;
+  _cfuvid?: string;
+  sessionKey: string;
+  sessionKeyLC: string;
+  routingHint?: string;
+  'ion-vk'?: string;
+}): Promise<void> {
+  const cookiesToSet = [
+    { name: 'sessionKey', value: cookies.sessionKey },
+    { name: 'sessionKeyLC', value: cookies.sessionKeyLC },
+  ];
+
+  if (cookies.__cf_bm) cookiesToSet.push({ name: '__cf_bm', value: cookies.__cf_bm });
+  if (cookies._cfuvid) cookiesToSet.push({ name: '_cfuvid', value: cookies._cfuvid });
+  if (cookies.routingHint) cookiesToSet.push({ name: 'routingHint', value: cookies.routingHint });
+  if (cookies['ion-vk']) cookiesToSet.push({ name: 'ion-vk', value: cookies['ion-vk'] });
+
+  for (const cookie of cookiesToSet) {
+    try {
+      const result = await chrome.cookies.set({
+        url: 'https://claude.ai',
+        name: cookie.name,
+        value: cookie.value,
+        domain: '.claude.ai',
+        path: '/',
+        secure: true,
+        httpOnly: false,
+        sameSite: 'lax' as chrome.cookies.SameSiteStatus,
+        expirationDate: Math.floor(Date.now() / 1000) + COOKIE_EXPIRY_SECONDS,
+      });
+      if (!result) {
+        console.error(`Failed to set cookie: ${cookie.name}`);
+      }
+    } catch (err: unknown) {
+      console.error(`Error setting cookie ${cookie.name}:`, err);
     }
-  } catch (err: unknown) {
-    throw new Error(
-      `设置 sessionKey cookie 失败: ${err instanceof Error ? err.message : String(err)}`
-    );
   }
 }
 
@@ -267,7 +298,7 @@ async function setSessionKeyCookie(sessionKey: string): Promise<void> {
 async function verifySessionKey(sessionKey: string): Promise<boolean> {
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 seconds for verification
 
     let response: Response;
     try {
@@ -277,7 +308,9 @@ async function verifySessionKey(sessionKey: string): Promise<boolean> {
           'accept': '*/*',
           'accept-language': 'en-US,en;q=0.9',
           'cookie': `sessionKey=${sessionKey}; sessionKeyLC=${Date.now()}`,
-          'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+          'anthropic-client-platform': 'web_claude_ai',
+          'anthropic-client-version': '1.0.0',
         },
         signal: controller.signal,
       });
