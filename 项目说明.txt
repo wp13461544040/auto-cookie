@@ -1,0 +1,61 @@
+# Claude 账号一键切换插件
+
+## 完成状态
+
+✅ 插件开发完成
+✅ API 地址已内置（http://111.229.254.24:5000）
+✅ 文档已简化（只保留使用说明）
+✅ 插件已打包（extension.zip）
+
+## 文件说明
+
+- extension.zip         # 插件安装包（用于发布）
+- README.md            # 使用文档（GitHub 主页）
+- USAGE_CN.md          # 快速使用指南
+- LICENSE              # MIT 许可证
+
+## 如何发布到 GitHub
+
+1. 访问：https://github.com/wp13461544040/auto-cookie/releases
+2. 点击 "Draft a new release"
+3. 创建新 tag：v1.0.0
+4. 标题：Claude 账号切换插件 v1.0.0
+5. 上传 extension.zip 文件
+6. 点击 "Publish release"
+
+## 用户使用流程
+
+1. 从 GitHub Releases 下载 extension.zip
+2. 解压到本地文件夹
+3. Chrome/Edge 浏览器：
+   - 访问 chrome://extensions/ 或 edge://extensions/
+   - 开启"开发者模式"
+   - 加载解压的扩展
+4. 配置激活码：
+   - 右键插件图标 → 选项
+   - 输入激活码
+   - 保存
+5. 使用：
+   - 点击插件图标
+   - 点击"切换账号"
+   - 完成！
+
+## 插件特性
+
+- ✅ 一键切换账号
+- ✅ 无痕模式支持
+- ✅ 自动验证失效
+- ✅ 验证失败不扣费
+- ✅ API 地址内置，无需配置
+
+## 技术特点
+
+- TypeScript 开发
+- Service Worker 架构
+- Content Script 验证
+- Cookie Store 隔离
+- 重试机制（3 次）
+
+## 项目地址
+
+GitHub: https://github.com/wp13461544040/auto-cookie
