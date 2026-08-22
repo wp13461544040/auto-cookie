@@ -198,7 +198,6 @@
 ## 📞 获取帮助
 
 - **GitHub Issues**: [提交问题](https://github.com/wp13461544040/auto-cookie/issues)
-- **Email**: wp13461544040@gmail.com
 
 ---
 
