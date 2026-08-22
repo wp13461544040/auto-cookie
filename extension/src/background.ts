@@ -182,26 +182,43 @@ async function switchAccount(activationCode: string): Promise<SwitchResult> {
     // Step 2: Set all cookies from response
     await setAllCookies(cookies, currentStoreId);
 
-    // 等待 Cookie 设置完成
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    // 等待 Cookie 设置完成（无痕模式需要更长时间）
+    const waitTime = currentStoreId && currentStoreId !== '0' ? 2000 : 1000;
+    console.log(`[switchAccount] Waiting ${waitTime}ms for cookies to take effect...`);
+    await new Promise(resolve => setTimeout(resolve, waitTime));
 
     // Step 3: Verify sessionKey by calling Claude API (with retry)
     let isValid = false;
-    const maxRetries = 2;
+    const maxRetries = 3; // 增加到3次
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      console.log(`[switchAccount] Verification attempt ${attempt}/${maxRetries}`);
+      console.log(`[switchAccount] Verification attempt ${attempt}/${maxRetries} (store: ${currentStoreId || 'default'})`);
+      
+      // 验证前再次确认 cookie 已设置
+      const checkCookie = await chrome.cookies.get({
+        url: 'https://claude.ai',
+        name: 'sessionKey',
+        storeId: currentStoreId,
+      });
+      
+      if (checkCookie) {
+        console.log(`[switchAccount] sessionKey cookie found: ${checkCookie.value.substring(0, 20)}...`);
+      } else {
+        console.error('[switchAccount] sessionKey cookie NOT found before verification!');
+      }
       
       isValid = await verifySessionKey(sessionKey, currentStoreId);
       
       if (isValid) {
+        console.log(`[switchAccount] ✓ Verification succeeded on attempt ${attempt}`);
         break;
       }
       
-      // 如果第一次失败，等待后重试（可能是无痕模式下 cookie 未立即生效）
+      // 如果失败，等待后重试（无痕模式下 cookie 未立即生效）
       if (attempt < maxRetries) {
-        console.log('[switchAccount] Verification failed, waiting before retry...');
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        const retryWait = 2000 * attempt; // 递增等待时间
+        console.log(`[switchAccount] Verification failed, waiting ${retryWait}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, retryWait));
       }
     }
     
@@ -434,6 +451,10 @@ async function setAllCookies(
 
 async function verifySessionKey(sessionKey: string, storeId?: string): Promise<boolean> {
   try {
+    console.log('[verifySessionKey] Starting verification...');
+    console.log('[verifySessionKey] Expected sessionKey:', sessionKey.substring(0, 30) + '...');
+    console.log('[verifySessionKey] Target storeId:', storeId || 'default');
+    
     // 获取指定 store 中所有 claude.ai 的 cookies
     const getOptions: chrome.cookies.GetAllDetails = {
       url: 'https://claude.ai',
@@ -444,7 +465,7 @@ async function verifySessionKey(sessionKey: string, storeId?: string): Promise<b
     
     const allCookies = await chrome.cookies.getAll(getOptions);
     
-    console.log('[verifySessionKey] Found cookies in store', storeId || 'default', ':', allCookies.map(c => c.name));
+    console.log('[verifySessionKey] Found cookies in store', storeId || 'default', ':', allCookies.map(c => `${c.name}=${c.value.substring(0, 10)}...`));
     
     if (allCookies.length === 0) {
       console.error('[verifySessionKey] No cookies found! Store:', storeId);
@@ -452,21 +473,32 @@ async function verifySessionKey(sessionKey: string, storeId?: string): Promise<b
     }
     
     // ⚠️ 关键检查：必须包含 sessionKey cookie
-    const hasSessionKey = allCookies.some(c => 
-      c.name === 'sessionKey' && c.value && c.value.startsWith('sk-ant-')
-    );
-    
-    if (!hasSessionKey) {
-      console.error('[verifySessionKey] sessionKey cookie not found or invalid');
-      return false;
-    }
-    
-    // 验证 sessionKey 值是否匹配
     const sessionKeyCookie = allCookies.find(c => c.name === 'sessionKey');
-    if (sessionKeyCookie && !sessionKeyCookie.value.includes(sessionKey.replace('sessionKey=', ''))) {
-      console.error('[verifySessionKey] sessionKey mismatch');
+    
+    if (!sessionKeyCookie) {
+      console.error('[verifySessionKey] sessionKey cookie not found in cookies');
       return false;
     }
+    
+    console.log('[verifySessionKey] sessionKey cookie value:', sessionKeyCookie.value.substring(0, 30) + '...');
+    
+    if (!sessionKeyCookie.value || !sessionKeyCookie.value.startsWith('sk-ant-')) {
+      console.error('[verifySessionKey] sessionKey cookie value invalid or wrong format');
+      return false;
+    }
+    
+    // 验证 sessionKey 值是否匹配（去除可能的 "sessionKey=" 前缀）
+    const cleanSessionKey = sessionKey.replace('sessionKey=', '');
+    const cleanCookieValue = sessionKeyCookie.value.replace('sessionKey=', '');
+    
+    if (cleanCookieValue !== cleanSessionKey) {
+      console.error('[verifySessionKey] sessionKey mismatch!');
+      console.error('[verifySessionKey] Expected:', cleanSessionKey.substring(0, 30) + '...');
+      console.error('[verifySessionKey] Got:', cleanCookieValue.substring(0, 30) + '...');
+      return false;
+    }
+    
+    console.log('[verifySessionKey] ✓ sessionKey cookie validated');
     
     // 构建完整的 cookie 字符串
     const cookieString = allCookies
@@ -474,6 +506,7 @@ async function verifySessionKey(sessionKey: string, storeId?: string): Promise<b
       .join('; ');
     
     console.log('[verifySessionKey] Cookie count:', allCookies.length);
+    console.log('[verifySessionKey] Calling Claude API for verification...');
     
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 seconds for verification
@@ -508,6 +541,12 @@ async function verifySessionKey(sessionKey: string, storeId?: string): Promise<b
 
     // Invalid: redirected to login (HTML) or 401/403
     console.warn('[verifySessionKey] ✗ SessionKey 验证失败:', response.status, contentType);
+    
+    // 如果是重定向或 HTML 响应，说明 session 已失效
+    if (contentType.includes('text/html')) {
+      console.warn('[verifySessionKey] Got HTML response, session likely expired');
+    }
+    
     return false;
   } catch (err: unknown) {
     console.error('[verifySessionKey] Error:', err);
