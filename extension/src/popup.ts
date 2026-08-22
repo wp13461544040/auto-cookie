@@ -62,17 +62,12 @@ export function updateStatus(type: StatusType, message: string, remainingUses?: 
 // ── Core switch logic (uses background service worker to bypass mixed content restrictions) ───
 
 async function doSwitchAccount(): Promise<MessageResponse> {
-  const storage = await chrome.storage.local.get(['activationCode', 'apiEndpoint']) as {
+  const storage = await chrome.storage.local.get(['activationCode']) as {
     activationCode?: string;
-    apiEndpoint?: string;
   };
 
   if (!storage.activationCode) {
     return { success: false, error: '请先在选项页面配置激活码' };
-  }
-
-  if (!storage.apiEndpoint) {
-    return { success: false, error: '请先在选项页面配置 API 地址' };
   }
 
   // Send message to background service worker to handle the API call

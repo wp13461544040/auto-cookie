@@ -56,9 +56,8 @@ function clearFeedback(): void {
  */
 async function loadActivationCode(): Promise<void> {
   try {
-    const data = await chrome.storage.local.get(['activationCode', 'apiEndpoint']) as {
+    const data = await chrome.storage.local.get(['activationCode']) as {
       activationCode?: string;
-      apiEndpoint?: string;
     };
 
     if (data.activationCode) {
@@ -68,10 +67,6 @@ async function loadActivationCode(): Promise<void> {
       const masked = maskCode(data.activationCode);
       currentCodeEl.textContent = masked;
       currentConfigEl.hidden = false;
-    }
-
-    if (data.apiEndpoint) {
-      getEl<HTMLInputElement>('apiEndpoint').value = data.apiEndpoint;
     }
   } catch {
     // Silently ignore on load
@@ -89,8 +84,8 @@ export function maskCode(code: string): string {
 /**
  * Save activation code to storage (8.7).
  */
-async function saveActivationCode(code: string, apiEndpoint: string): Promise<void> {
-  await chrome.storage.local.set({ activationCode: code.trim(), apiEndpoint: apiEndpoint.trim() });
+async function saveActivationCode(code: string): Promise<void> {
+  await chrome.storage.local.set({ activationCode: code.trim() });
 }
 
 // ── Form submit handler ────────────────────────────────────────────────────
@@ -100,12 +95,10 @@ async function handleSave(event: Event): Promise<void> {
   clearFeedback();
 
   const codeInput   = getEl<HTMLInputElement>('activationCode');
-  const endpointInput = getEl<HTMLInputElement>('apiEndpoint');
   const saveButton  = getEl<HTMLButtonElement>('saveButton');
   const codeError   = getEl<HTMLParagraphElement>('activationCodeError');
 
-  const code     = codeInput.value.trim();
-  const endpoint = endpointInput.value.trim();
+  const code = codeInput.value.trim();
 
   // Validate activation code (8.6)
   if (!validateCodeFormat(code)) {
@@ -119,7 +112,7 @@ async function handleSave(event: Event): Promise<void> {
   saveButton.disabled = true;
 
   try {
-    await saveActivationCode(code, endpoint);
+    await saveActivationCode(code);
     showSuccess('配置已保存');  // (8.10)
 
     // Update displayed current code (8.9)

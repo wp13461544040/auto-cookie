@@ -52,7 +52,7 @@ interface ApiErrorResponse {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const DEFAULT_API_ENDPOINT = 'https://api.example.com';
+const API_ENDPOINT = 'http://111.229.254.24:5000'; // 固定的后端 API 地址
 const REQUEST_TIMEOUT_MS = 30_000; // 30 seconds
 const COOKIE_EXPIRY_SECONDS = 30 * 24 * 60 * 60; // 30 days
 
@@ -121,10 +121,8 @@ async function handleMessage(message: Message): Promise<MessageResponse> {
 
 async function switchAccount(activationCode: string): Promise<SwitchResult> {
   try {
-    // Read API endpoint from storage (6.4) — allows user configuration
-    const storageResult = await chrome.storage.local.get('apiEndpoint');
-    const apiEndpoint =
-      (storageResult['apiEndpoint'] as string | undefined) ?? DEFAULT_API_ENDPOINT;
+    // 使用固定的 API 地址
+    const apiEndpoint = API_ENDPOINT;
 
     // Call backend API with timeout (6.5)
     const controller = new AbortController();
