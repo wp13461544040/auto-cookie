@@ -209,7 +209,7 @@ async function switchAccount(activationCode: string): Promise<SwitchResult> {
       
       return {
         success: false,
-        error: 'SessionKey 验证失败，此账号已失效，请重试获取新账号',
+        error: 'SessionKey 验证失败，此账号已失效（不扣除使用次数），请重试获取新账号',
         reason: 'expired',
       };
     }
