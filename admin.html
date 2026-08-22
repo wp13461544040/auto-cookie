@@ -1317,7 +1317,7 @@
       }
 
       try {
-        const response = await authFetch(`${API_BASE}/config/auto-unbind`, {
+        const response = await api(`/config/auto-unbind`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ hours })
@@ -1339,7 +1339,7 @@
     // 加载解绑配置
     async function loadUnbindSettings() {
       try {
-        const response = await authFetch(`${API_BASE}/config/auto-unbind`);
+        const response = await api(`/config/auto-unbind`);
         
         if (!response.ok) {
           throw new Error('加载配置失败');
@@ -1382,7 +1382,7 @@
       }
 
       try {
-        const response = await authFetch(`${API_BASE}/config/auto-unbind/run`, {
+        const response = await api(`/config/auto-unbind/run`, {
           method: 'POST'
         });
 
