@@ -499,79 +499,53 @@ async function verifySessionKey(sessionKey: string, storeId?: string): Promise<b
     }
     
     console.log('[verifySessionKey] ✓ sessionKey cookie validated');
-    
-    // 构建完整的 cookie 字符串
-    const cookieString = allCookies
-      .map(cookie => `${cookie.name}=${cookie.value}`)
-      .join('; ');
-    
     console.log('[verifySessionKey] Cookie count:', allCookies.length);
-    console.log('[verifySessionKey] Cookie string length:', cookieString.length);
-    console.log('[verifySessionKey] Calling Claude API for verification...');
     
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
-
-    let response: Response;
-    try {
-      // 使用 XMLHttpRequest 来确保 cookies 被正确发送
-      response = await new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open('GET', 'https://claude.ai/api/account?statsig_hashing_algorithm=djb2', true);
-        
-        // 设置必要的 headers
-        xhr.setRequestHeader('accept', '*/*');
-        xhr.setRequestHeader('accept-language', 'en-US,en;q=0.9');
-        xhr.setRequestHeader('user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36');
-        xhr.setRequestHeader('anthropic-client-platform', 'web_claude_ai');
-        xhr.setRequestHeader('anthropic-client-version', '1.0.0');
-        
-        // 手动设置 Cookie header
-        xhr.setRequestHeader('Cookie', cookieString);
-        
-        xhr.withCredentials = true; // 允许发送 cookies
-        
-        xhr.onload = () => {
-          const headers = new Headers();
-          const contentType = xhr.getResponseHeader('content-type') || '';
-          headers.set('content-type', contentType);
-          
-          resolve(new Response(xhr.responseText, {
-            status: xhr.status,
-            statusText: xhr.statusText,
-            headers: headers,
-          }));
-        };
-        
-        xhr.onerror = () => reject(new Error('Network error'));
-        xhr.ontimeout = () => reject(new Error('Request timeout'));
-        
-        xhr.timeout = 15000;
-        xhr.send();
+    // 查找 claude.ai 页面并通过 content script 验证
+    console.log('[verifySessionKey] Looking for claude.ai tabs...');
+    const tabs = await chrome.tabs.query({ url: 'https://claude.ai/*' });
+    
+    if (tabs.length === 0) {
+      console.log('[verifySessionKey] No claude.ai tabs found, creating one...');
+      // 如果没有 claude.ai 标签页，创建一个（但不激活）
+      const newTab = await chrome.tabs.create({
+        url: 'https://claude.ai',
+        active: false,
       });
-    } finally {
-      clearTimeout(timeoutId);
-    }
-
-    const contentType = response.headers.get('content-type') || '';
-
-    console.log('[verifySessionKey] Response status:', response.status, 'Content-Type:', contentType);
-
-    // Valid: 200 + JSON response
-    if (response.status === 200 && contentType.includes('application/json')) {
-      console.log('[verifySessionKey] ✓ SessionKey 验证通过');
-      return true;
-    }
-
-    // Invalid: redirected to login (HTML) or 401/403
-    console.warn('[verifySessionKey] ✗ SessionKey 验证失败:', response.status, contentType);
-    
-    // 如果是重定向或 HTML 响应，说明 session 已失效
-    if (contentType.includes('text/html')) {
-      console.warn('[verifySessionKey] Got HTML response, session likely expired');
+      
+      // 等待页面加载
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      if (!newTab.id) {
+        console.error('[verifySessionKey] Failed to create tab');
+        return false;
+      }
+      
+      // 通过新创建的标签页验证
+      const result = await chrome.tabs.sendMessage(newTab.id, { action: 'verifySessionKey' });
+      
+      // 关闭创建的标签页
+      await chrome.tabs.remove(newTab.id);
+      
+      console.log('[verifySessionKey] Verification result from new tab:', result);
+      return result.success === true;
     }
     
-    return false;
+    // 使用第一个找到的标签页
+    const targetTab = tabs[0];
+    if (!targetTab.id) {
+      console.error('[verifySessionKey] Tab has no ID');
+      return false;
+    }
+    
+    console.log('[verifySessionKey] Using existing tab:', targetTab.id);
+    
+    // 通过 content script 执行验证
+    const result = await chrome.tabs.sendMessage(targetTab.id, { action: 'verifySessionKey' });
+    
+    console.log('[verifySessionKey] Verification result:', result);
+    return result.success === true;
+    
   } catch (err: unknown) {
     console.error('[verifySessionKey] Error:', err);
     return false;

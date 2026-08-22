@@ -6,11 +6,12 @@ module.exports = (env, argv) => {
   const isDevelopment = argv.mode === 'development';
 
   return {
-    // 多入口：background, popup, options
+    // 多入口：background, popup, options, verify-helper
     entry: {
       background: './src/background.ts',
       popup: './src/popup.ts',
       options: './src/options.ts',
+      'verify-helper': './src/verify-helper.ts',
     },
 
     output: {
