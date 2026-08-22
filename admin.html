@@ -1317,14 +1317,13 @@
       }
 
       try {
-        const response = await api(`/config/auto-unbind`, {
+        const data = await api(`/config/auto-unbind`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ hours })
         });
 
-        if (!response.ok) {
-          const data = await response.json();
+        if (!data.success) {
           throw new Error(data.error || '保存失败');
         }
 
@@ -1339,14 +1338,12 @@
     // 加载解绑配置
     async function loadUnbindSettings() {
       try {
-        const response = await api(`/config/auto-unbind`);
+        const data = await api(`/config/auto-unbind`);
         
-        if (!response.ok) {
+        if (!data.success) {
           throw new Error('加载配置失败');
         }
 
-        const data = await response.json();
-        
         // 更新表单
         document.getElementById('autoUnbindHours').value = data.hours || 8;
         
@@ -1382,16 +1379,14 @@
       }
 
       try {
-        const response = await api(`/config/auto-unbind/run`, {
+        const data = await api(`/config/auto-unbind/run`, {
           method: 'POST'
         });
 
-        if (!response.ok) {
-          const data = await response.json();
+        if (!data.success) {
           throw new Error(data.error || '执行失败');
         }
 
-        const data = await response.json();
         alert(`✅ 执行完成！\n\n解绑了 ${data.unboundCount} 个 SessionKey`);
         
         // 刷新状态和统计
