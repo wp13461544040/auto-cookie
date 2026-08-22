@@ -506,24 +506,48 @@ async function verifySessionKey(sessionKey: string, storeId?: string): Promise<b
       .join('; ');
     
     console.log('[verifySessionKey] Cookie count:', allCookies.length);
+    console.log('[verifySessionKey] Cookie string length:', cookieString.length);
     console.log('[verifySessionKey] Calling Claude API for verification...');
     
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 seconds for verification
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
 
     let response: Response;
     try {
-      response = await fetch('https://claude.ai/api/account?statsig_hashing_algorithm=djb2', {
-        method: 'GET',
-        headers: {
-          'accept': '*/*',
-          'accept-language': 'en-US,en;q=0.9',
-          'cookie': cookieString,
-          'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-          'anthropic-client-platform': 'web_claude_ai',
-          'anthropic-client-version': '1.0.0',
-        },
-        signal: controller.signal,
+      // 使用 XMLHttpRequest 来确保 cookies 被正确发送
+      response = await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', 'https://claude.ai/api/account?statsig_hashing_algorithm=djb2', true);
+        
+        // 设置必要的 headers
+        xhr.setRequestHeader('accept', '*/*');
+        xhr.setRequestHeader('accept-language', 'en-US,en;q=0.9');
+        xhr.setRequestHeader('user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36');
+        xhr.setRequestHeader('anthropic-client-platform', 'web_claude_ai');
+        xhr.setRequestHeader('anthropic-client-version', '1.0.0');
+        
+        // 手动设置 Cookie header
+        xhr.setRequestHeader('Cookie', cookieString);
+        
+        xhr.withCredentials = true; // 允许发送 cookies
+        
+        xhr.onload = () => {
+          const headers = new Headers();
+          const contentType = xhr.getResponseHeader('content-type') || '';
+          headers.set('content-type', contentType);
+          
+          resolve(new Response(xhr.responseText, {
+            status: xhr.status,
+            statusText: xhr.statusText,
+            headers: headers,
+          }));
+        };
+        
+        xhr.onerror = () => reject(new Error('Network error'));
+        xhr.ontimeout = () => reject(new Error('Request timeout'));
+        
+        xhr.timeout = 15000;
+        xhr.send();
       });
     } finally {
       clearTimeout(timeoutId);
