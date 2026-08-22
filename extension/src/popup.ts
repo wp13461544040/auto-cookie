@@ -284,7 +284,12 @@ export function mapErrorMessage(error?: string, reason?: string): string {
         return error; // 直接返回详细的错误信息
       }
       return '激活码已过期，请联系管理员';
-    case 'no_uses_left':  return '激活码使用次数已耗尽';
+    case 'no_uses_left':
+      // 检查是库存不足还是激活码次数耗尽
+      if (error && error.includes('库存')) {
+        return '❌ 当前没有可用的账号库存\n\n可能原因：\n· 所有账号都已被使用\n· 等待账号自动解绑（8小时后）\n\n请稍后重试或联系管理员';
+      }
+      return '激活码使用次数已耗尽';
     case 'disabled':      return '激活码已被禁用';
     default:              return error ?? '切换失败，请重试';
   }

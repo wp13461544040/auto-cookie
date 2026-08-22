@@ -3,11 +3,15 @@ import fs from 'fs';
 import http from 'http';
 import https from 'https';
 import app from './app';
+import { startAutoUnbindScheduler } from './services/autoUnbindScheduler';
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const HTTPS_PORT = parseInt(process.env.HTTPS_PORT || '3443', 10);
 const TLS_KEY_PATH = process.env.TLS_KEY_PATH || '';
 const TLS_CERT_PATH = process.env.TLS_CERT_PATH || '';
+
+// 启动自动解绑定时任务
+startAutoUnbindScheduler();
 
 // Start HTTPS if TLS cert/key paths are configured, otherwise HTTP
 if (TLS_KEY_PATH && TLS_CERT_PATH && fs.existsSync(TLS_KEY_PATH) && fs.existsSync(TLS_CERT_PATH)) {

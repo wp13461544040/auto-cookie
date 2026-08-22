@@ -151,7 +151,73 @@
 
     <!-- 自动清理设置 -->
     <div class="panel" id="panel-settings">
-      <h3 style="margin-bottom: 15px;">⏰ 定时自动清理设置</h3>
+      <h3 style="margin-bottom: 15px;">⚙️ 系统设置</h3>
+      
+      <!-- 自动解绑配置 -->
+      <div style="background: #fff; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e0e0e0;">
+        <h4 style="margin: 0 0 15px 0; display: flex; align-items: center; gap: 8px;">
+          <span>🔓</span>
+          <span>SessionKey 自动解绑</span>
+        </h4>
+        
+        <div style="background: #e7f3ff; padding: 12px; border-radius: 6px; margin-bottom: 15px; border-left: 4px solid #2196f3;">
+          <p style="margin: 0; color: #0d47a1; font-size: 13px;">
+            <strong>功能说明：</strong>当 SessionKey 绑定后超过指定时间未使用，系统会自动解绑并回收到可用库存。
+          </p>
+        </div>
+
+        <div class="form-row">
+          <div>
+            <label style="display: block; margin-bottom: 8px; font-weight: 500;">自动解绑时间（小时）</label>
+            <input type="number" id="autoUnbindHours" value="8" min="0" max="168" 
+                   style="font-size: 16px; padding: 12px;"
+                   onchange="saveUnbindSettings()">
+            <p style="font-size: 12px; color: #666; margin-top: 5px;">
+              设置为 0 表示禁用自动解绑，建议：1-24 小时
+            </p>
+            <div style="display: flex; gap: 5px; margin-top: 8px; flex-wrap: wrap;">
+              <button class="btn" style="padding: 6px 12px; font-size: 12px; background: #e3f2fd; color: #1976d2;" 
+                      onclick="setUnbindHours(1)">1小时</button>
+              <button class="btn" style="padding: 6px 12px; font-size: 12px; background: #e3f2fd; color: #1976d2;" 
+                      onclick="setUnbindHours(4)">4小时</button>
+              <button class="btn" style="padding: 6px 12px; font-size: 12px; background: #e3f2fd; color: #1976d2;" 
+                      onclick="setUnbindHours(8)">8小时</button>
+              <button class="btn" style="padding: 6px 12px; font-size: 12px; background: #e3f2fd; color: #1976d2;" 
+                      onclick="setUnbindHours(12)">12小时</button>
+              <button class="btn" style="padding: 6px 12px; font-size: 12px; background: #e3f2fd; color: #1976d2;" 
+                      onclick="setUnbindHours(24)">24小时</button>
+              <button class="btn" style="padding: 6px 12px; font-size: 12px; background: #ffebee; color: #c62828;" 
+                      onclick="setUnbindHours(0)">禁用</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="unbindStatus" style="margin-top: 15px; padding: 12px; border-radius: 6px; background: #f5f5f5;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <span style="font-size: 13px; color: #666;">当前状态</span>
+            <span id="unbindStatusBadge" class="badge badge-success">运行中</span>
+          </div>
+          <div style="font-size: 12px; color: #888;">
+            <div>下次检查时间: <span id="nextUnbindCheck">-</span></div>
+            <div style="margin-top: 4px;">最近解绑: <span id="lastUnbindCount">0</span> 个 SessionKey</div>
+          </div>
+        </div>
+
+        <div style="margin-top: 15px; display: flex; gap: 10px;">
+          <button class="btn btn-primary" onclick="saveUnbindSettings()">💾 保存配置</button>
+          <button class="btn btn-success" onclick="runUnbindNow()">▶️ 立即执行</button>
+          <button class="btn" style="background: #6c757d; color: #fff;" onclick="loadUnbindSettings()">🔄 刷新状态</button>
+        </div>
+      </div>
+
+      <hr style="margin: 30px 0; border: none; border-top: 1px solid #e0e0e0;">
+
+      <!-- 定时自动清理 -->
+      <div style="background: #fff; padding: 20px; border-radius: 8px; border: 1px solid #e0e0e0;">
+        <h4 style="margin: 0 0 15px 0; display: flex; align-items: center; gap: 8px;">
+          <span>⏰</span>
+          <span>定时自动清理</span>
+        </h4>
       
       <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
         <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
@@ -205,8 +271,9 @@
         <button class="btn btn-success" onclick="runCleanNow()">立即执行清理</button>
         <button class="btn btn-danger" onclick="clearCleanLogs()">清空日志</button>
       </div>
-    </div>
-  </div>
+
+      </div><!-- /定时自动清理 border box -->
+    </div><!-- /panel-settings -->
 
   <!-- 创建激活码弹窗 -->
   <div class="modal" id="createCodeModal">
@@ -1232,6 +1299,115 @@
       ).join('');
     }
 
+    // ==================== 自动解绑配置 ====================
+    
+    // 设置解绑小时数快捷按钮
+    function setUnbindHours(hours) {
+      document.getElementById('autoUnbindHours').value = hours;
+      saveUnbindSettings();
+    }
+
+    // 保存解绑配置
+    async function saveUnbindSettings() {
+      const hours = parseInt(document.getElementById('autoUnbindHours').value || '0', 10);
+      
+      if (hours < 0 || hours > 168) {
+        alert('❌ 解绑时间必须在 0-168 小时之间');
+        return;
+      }
+
+      try {
+        const response = await authFetch(`${API_BASE}/config/auto-unbind`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ hours })
+        });
+
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.error || '保存失败');
+        }
+
+        alert(`✅ 保存成功！自动解绑时间已设置为 ${hours} 小时${hours === 0 ? '（已禁用）' : ''}`);
+        loadUnbindSettings();
+      } catch (err) {
+        console.error('保存解绑配置失败:', err);
+        alert('❌ 保存失败: ' + err.message);
+      }
+    }
+
+    // 加载解绑配置
+    async function loadUnbindSettings() {
+      try {
+        const response = await authFetch(`${API_BASE}/config/auto-unbind`);
+        
+        if (!response.ok) {
+          throw new Error('加载配置失败');
+        }
+
+        const data = await response.json();
+        
+        // 更新表单
+        document.getElementById('autoUnbindHours').value = data.hours || 8;
+        
+        // 更新状态显示
+        const statusBadge = document.getElementById('unbindStatusBadge');
+        if (data.enabled) {
+          statusBadge.className = 'badge badge-success';
+          statusBadge.textContent = '运行中';
+        } else {
+          statusBadge.className = 'badge badge-danger';
+          statusBadge.textContent = '已禁用';
+        }
+
+        // 更新统计信息
+        if (data.nextCheck) {
+          const nextTime = new Date(data.nextCheck);
+          document.getElementById('nextUnbindCheck').textContent = nextTime.toLocaleString('zh-CN');
+        } else {
+          document.getElementById('nextUnbindCheck').textContent = data.enabled ? '1 小时内' : '-';
+        }
+
+        document.getElementById('lastUnbindCount').textContent = data.lastUnbindCount || 0;
+
+      } catch (err) {
+        console.error('加载解绑配置失败:', err);
+      }
+    }
+
+    // 立即执行解绑
+    async function runUnbindNow() {
+      if (!confirm('确定立即执行自动解绑检查？\n\n这将解绑所有超过设定时间未使用的 SessionKey。')) {
+        return;
+      }
+
+      try {
+        const response = await authFetch(`${API_BASE}/config/auto-unbind/run`, {
+          method: 'POST'
+        });
+
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.error || '执行失败');
+        }
+
+        const data = await response.json();
+        alert(`✅ 执行完成！\n\n解绑了 ${data.unboundCount} 个 SessionKey`);
+        
+        // 刷新状态和统计
+        loadUnbindSettings();
+        loadStats();
+        if (document.getElementById('panel-keys').classList.contains('active')) {
+          loadKeys();
+        }
+      } catch (err) {
+        console.error('执行解绑失败:', err);
+        alert('❌ 执行失败: ' + err.message);
+      }
+    }
+
+    // ==================== End 自动解绑配置 ====================
+
     function clearCleanLogs() {
       if (!confirm('确定清空所有日志？')) return;
       localStorage.removeItem('cleanLogs');
@@ -1254,6 +1430,7 @@
             await loadStats();
             loadCodes();
             loadAutoCleanSettings();
+            loadUnbindSettings(); // 加载自动解绑配置
             setInterval(loadStats, 30000);
           } catch (err) {
             // token 无效或过期，显示登录框

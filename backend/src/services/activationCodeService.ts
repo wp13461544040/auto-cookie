@@ -183,7 +183,7 @@ export async function validateAndUseCode(
       [activationCode]
     );
     await logUsage({ activationCode, ipAddress, userAgent, success: false, errorReason: 'no_uses_left' });
-    return { success: false, error: 'No session keys available', reason: 'no_uses_left' };
+    return { success: false, error: '当前没有可用的账号库存，请稍后重试', reason: 'no_uses_left' };
   }
 
   const keyRow = keyRows[0] as {
@@ -269,19 +269,17 @@ export async function logUsage(input: CreateUsageLogInput): Promise<void> {
 }
 
 /**
- * Mark a sessionKey as invalid (expired)
- * Called by client when validation fails
- * 同时解绑激活码，允许重新分配
+ * Mark a sessionKey as invalid — 直接从数据库删除该记录
+ * Called by client when validation fails after account switch
  */
 export async function markSessionKeyAsInvalid(sessionKey: string): Promise<void> {
-  const now = new Date();
-  await query<ResultSetHeader>(
-    `UPDATE session_keys 
-     SET isActive = FALSE, lastCheckStatus = 'expired', lastCheckedAt = ?, activationCode = NULL
+  const result = await query<ResultSetHeader>(
+    `DELETE FROM session_keys
      WHERE sessionKey = ? OR sessionKey = CONCAT('sessionKey=', ?)`,
-    [toMySQLDateTime(now), sessionKey, sessionKey]
+    [sessionKey, sessionKey]
   );
-  console.log(`[markSessionKeyAsInvalid] Marked key as expired and unbound: ${sessionKey.substring(0, 20)}...`);
+  const affected = (result as ResultSetHeader).affectedRows;
+  console.log(`[markSessionKeyAsInvalid] Deleted ${affected} invalid key(s): ${sessionKey.substring(0, 20)}...`);
 }
 
 /**

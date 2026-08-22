@@ -736,4 +736,62 @@ router.post('/batch-check-keys', async (req: Request, res: Response): Promise<vo
   }
 });
 
+// ── 自动解绑配置 ───────────────────────────────────────────────────────────
+
+import { getUnbindConfig, setUnbindConfig, runUnbindNow as runUnbind, getUnbindStatus } from '../services/autoUnbindScheduler';
+
+/**
+ * GET /admin/config/auto-unbind
+ * 获取当前自动解绑配置及状态
+ */
+router.get('/config/auto-unbind', async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const config = getUnbindConfig();
+    const status = getUnbindStatus();
+    res.json({
+      success: true,
+      hours: config.hours,
+      enabled: config.hours > 0,
+      nextCheck: status.nextCheck,
+      lastUnbindCount: status.lastUnbindCount,
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
+/**
+ * PUT /admin/config/auto-unbind
+ * 保存自动解绑配置
+ * Body: { hours: number }
+ */
+router.put('/config/auto-unbind', async (req: Request, res: Response): Promise<void> => {
+  const { hours } = req.body as { hours?: unknown };
+
+  if (hours === undefined || typeof hours !== 'number' || !Number.isInteger(hours) || hours < 0 || hours > 168) {
+    res.status(400).json({ success: false, error: 'hours 必须是 0-168 的整数' });
+    return;
+  }
+
+  try {
+    setUnbindConfig({ hours });
+    res.json({ success: true, hours, enabled: hours > 0 });
+  } catch (err) {
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
+/**
+ * POST /admin/config/auto-unbind/run
+ * 立即执行一次自动解绑
+ */
+router.post('/config/auto-unbind/run', async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const unboundCount = await runUnbind();
+    res.json({ success: true, unboundCount });
+  } catch (err) {
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
 export default router;
