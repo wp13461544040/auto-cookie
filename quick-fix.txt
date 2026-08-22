@@ -1,0 +1,43 @@
+# 快速修复 proxy 字段缺失问题
+# 复制下面的命令，在服务器上执行
+
+# ========================================
+# 方法 1：直接执行 SQL（最简单）
+# ========================================
+
+cd /root/auto-cookie
+
+docker-compose exec db mysql -uroot -p${DB_ROOT_PASSWORD} claude_switcher -e "ALTER TABLE session_keys ADD COLUMN proxy VARCHAR(255) NULL COMMENT '代理地址' AFTER cfUvid;"
+
+docker-compose restart backend
+
+
+# ========================================
+# 方法 2：进入容器手动执行
+# ========================================
+
+cd /root/auto-cookie
+
+# 1. 进入数据库
+docker-compose exec db mysql -uroot -p${DB_ROOT_PASSWORD}
+
+# 2. 然后输入以下 SQL（逐行复制粘贴）
+USE claude_switcher;
+
+ALTER TABLE session_keys ADD COLUMN proxy VARCHAR(255) NULL;
+
+DESCRIBE session_keys;
+
+EXIT;
+
+# 3. 重启后端
+docker-compose restart backend
+
+
+# ========================================
+# 验证字段已添加
+# ========================================
+
+docker-compose exec db mysql -uroot -p${DB_ROOT_PASSWORD} claude_switcher -e "SHOW COLUMNS FROM session_keys LIKE 'proxy';"
+
+# 如果输出有 proxy 行，说明成功

@@ -185,8 +185,25 @@ async function switchAccount(activationCode: string): Promise<SwitchResult> {
     // 等待 Cookie 设置完成
     await new Promise(resolve => setTimeout(resolve, 1000));
 
-    // Step 3: Verify sessionKey by calling Claude API
-    const isValid = await verifySessionKey(sessionKey, currentStoreId);
+    // Step 3: Verify sessionKey by calling Claude API (with retry)
+    let isValid = false;
+    const maxRetries = 2;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      console.log(`[switchAccount] Verification attempt ${attempt}/${maxRetries}`);
+      
+      isValid = await verifySessionKey(sessionKey, currentStoreId);
+      
+      if (isValid) {
+        break;
+      }
+      
+      // 如果第一次失败，等待后重试（可能是无痕模式下 cookie 未立即生效）
+      if (attempt < maxRetries) {
+        console.log('[switchAccount] Verification failed, waiting before retry...');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+    }
     
     if (!isValid) {
       // SessionKey 验证失败，回滚激活码使用次数
@@ -415,7 +432,7 @@ async function setAllCookies(
 
 // ─── Verify SessionKey (client-side validation) ──────────────────────────────
 
-async function verifySessionKey(_sessionKey: string, storeId?: string): Promise<boolean> {
+async function verifySessionKey(sessionKey: string, storeId?: string): Promise<boolean> {
   try {
     // 获取指定 store 中所有 claude.ai 的 cookies
     const getOptions: chrome.cookies.GetAllDetails = {
@@ -431,6 +448,23 @@ async function verifySessionKey(_sessionKey: string, storeId?: string): Promise<
     
     if (allCookies.length === 0) {
       console.error('[verifySessionKey] No cookies found! Store:', storeId);
+      return false;
+    }
+    
+    // ⚠️ 关键检查：必须包含 sessionKey cookie
+    const hasSessionKey = allCookies.some(c => 
+      c.name === 'sessionKey' && c.value && c.value.startsWith('sk-ant-')
+    );
+    
+    if (!hasSessionKey) {
+      console.error('[verifySessionKey] sessionKey cookie not found or invalid');
+      return false;
+    }
+    
+    // 验证 sessionKey 值是否匹配
+    const sessionKeyCookie = allCookies.find(c => c.name === 'sessionKey');
+    if (sessionKeyCookie && !sessionKeyCookie.value.includes(sessionKey.replace('sessionKey=', ''))) {
+      console.error('[verifySessionKey] sessionKey mismatch');
       return false;
     }
     
